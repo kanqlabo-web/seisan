@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <title>
+    支払いを追加
+  </title>
+
+  <link
+    rel="stylesheet"
+    href="style.css"
+  >
+
+</head>
+
+
+<body>
+
+  <main class="container">
+
+
+    <header>
+
+      <a
+        id="backLink"
+        class="back-link"
+      >
+        ← イベントに戻る
+      </a>
+
+
+      <h1
+        id="pageTitle"
+      >
+        支払いを追加
+      </h1>
+
+    </header>
+
+
+    <!-- 入力モード -->
+
+    <section class="card">
+
+      <h2>
+        入力モード
+      </h2>
+
+
+      <div class="mode-switch">
+
+        <button
+          id="splitModeButton"
+          type="button"
+          class="mode-button active"
+        >
+          割り勘モード
+        </button>
+
+
+        <button
+          id="exactModeButton"
+          type="button"
+          class="mode-button"
+        >
+          個別金額モード
+        </button>
+
+      </div>
+
+
+      <p
+        id="modeHint"
+        class="hint"
+      >
+        参加者全員で金額を割り勘します（ステータス割引が適用されます）
+      </p>
+
+    </section>
+
+
+    <!-- 支払い情報 -->
+
+    <section class="card">
+
+      <h2>
+        支払い情報
+      </h2>
+
+      <p class="required-note">
+        <span class="required-mark">*</span> は必須項目です
+      </p>
+
+
+      <label>
+        支払った人 <span class="required-mark" aria-label="必須">*</span>
+      </label>
+
+      <select id="payer">
+
+      </select>
+
+
+      <div id="amountFieldGroup">
+
+        <label>
+          金額 <span class="required-mark" aria-label="必須">*</span>
+        </label>
+
+        <input
+          id="amount"
+          type="number"
+          placeholder="金額"
+          min="1"
+        >
+
+      </div>
+
+
+      <label>
+        内容
+      </label>
+
+      <input
+        id="description"
+        type="text"
+        placeholder="例：BBQ"
+      >
+
+    </section>
+
+
+    <!-- ステータス -->
+
+    <section
+      id="statusCard"
+      class="card"
+    >
+
+      <h2>
+        この支払いで使用するステータス
+      </h2>
+
+
+      <div
+        id="paymentStatusOptions"
+        class="checkbox-group"
+      ></div>
+
+    </section>
+
+
+    <!-- 対象者 -->
+
+    <section class="card">
+
+      <h2>
+        支払い対象者
+      </h2>
+
+
+      <p
+        id="exactModeDescription"
+        class="section-description"
+        hidden
+      >
+        同じ店で別々のものを頼んだ場合など、各自の金額をそのまま入力できます。
+      </p>
+
+
+      <div
+        id="paymentMembers"
+      ></div>
+
+
+      <p
+        id="exactTotalDisplay"
+        class="hint"
+        hidden
+      ></p>
+
+    </section>
+
+
+    <button
+      id="savePaymentButton"
+      class="primary-button"
+    >
+
+      支払いを追加
+
+    </button>
+
+
+  </main>
+
+
+  <script
+    type="module"
+    src="payment.js"
+  ></script>
+
+</body>
+
+</html>

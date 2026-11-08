@@ -1,0 +1,1748 @@
+/* =========================
+   基本
+========================= */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #f4f4f4;
+  color: #111;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  font-size: 14px; /* 全体のベースサイズを14pxに設定 */
+}
+
+
+/* =========================
+   共通レイアウト
+========================= */
+
+header,
+main,
+.mode-section,
+.container {
+  width: 100%;
+  max-width: 760px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+
+/* =========================
+   ヘッダー
+========================= */
+
+header {
+  padding: 48px 24px 24px;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 28px;
+  letter-spacing: -1px;
+}
+
+header p {
+  margin: 8px 0 0;
+  color: #777;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 16px;
+  color: #666;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+
+/* =========================
+   メイン
+========================= */
+
+main,
+.mode-section {
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+.container {
+  padding: 24px;
+}
+
+
+/* =========================
+   カード
+========================= */
+
+.card {
+  width: 100%;
+  margin-bottom: 20px;
+  padding: 24px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 16px;
+}
+
+.card h2 {
+  margin-top: 0;
+  margin-bottom: 12px;
+  font-size: 18px;
+}
+
+.card h3 {
+  margin-top: 28px;
+  font-size: 16px;
+}
+
+/* =========================
+   説明文
+========================= */
+
+.section-description {
+  margin: 0 0 20px;
+  color: #666;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+
+/* =========================
+   入力
+========================= */
+
+input,
+select {
+  width: 100%;
+  margin: 8px 0;
+  padding: 12px 14px;
+  background: #fff;
+  color: #111;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 16px; /* iOSの自動ズーム防止のため16pxを維持 */
+}
+
+.input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.input-row > input {
+  flex: 1;
+  min-width: 0;
+}
+
+
+/* =========================
+   割引率入力
+========================= */
+
+.discount-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.discount-input-wrapper input {
+  width: 130px !important;
+  min-width: 130px;
+  margin: 0 !important;
+  flex: 0 0 130px !important;
+}
+
+.discount-input-wrapper span {
+  display: inline-block;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.discount-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.discount-field span {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.discount-field input {
+  width: 90px !important;
+  min-width: 90px;
+  margin: 0 !important;
+  flex: 0 0 90px !important;
+}
+
+
+/* =========================
+   ボタン
+========================= */
+
+button {
+  padding: 10px 16px;
+  background: #111;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition:
+    opacity 0.2s,
+    transform 0.15s;
+}
+
+button:hover {
+  opacity: 0.8;
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+.primary-button {
+  width: 100%;
+  padding: 18px 20px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* =========================
+   secondary button
+========================= */
+
+.secondary-button {
+  width: 100%;
+  padding: 18px 20px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  background: #fff;
+  color: #111;
+  border: 2px solid #111;
+}
+
+
+/* =========================
+   作成 / 保存セクション
+========================= */
+
+.create-section {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.create-section .primary-button,
+.create-section .secondary-button {
+  flex: 1;
+  width: auto;
+}
+
+
+/* =========================
+   モード切り替え
+========================= */
+
+.mode-switch {
+  display: flex;
+  width: 100%;
+  margin-bottom: 24px;
+  padding: 4px;
+  background: #e9e9e9;
+  border-radius: 12px;
+}
+
+.mode-button {
+  flex: 1;
+  padding: 12px 16px;
+  background: transparent;
+  color: #777;
+  border: none;
+  margin: 0px;
+  border-radius: 9px;
+  font-size: 14px;
+  transition:
+    background 0.2s,
+    color 0.2s,
+    box-shadow 0.2s;
+}
+
+.mode-button:hover {
+  color: #111;
+  opacity: 1;
+}
+
+.mode-button.active {
+  background: #fff;
+  color: #111;
+  font-weight: 600;
+  box-shadow:
+    0 2px 6px
+    rgba(0, 0, 0, 0.08);
+}
+
+
+/* =========================
+   チェックボックス
+========================= */
+
+.checkbox-list,
+.checkbox-container,
+.checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  flex: 0 0 auto;
+}
+
+.checkbox-label span {
+  flex: 1;
+}
+
+
+/* =========================
+   リスト
+========================= */
+
+.list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.list-item strong {
+  display: block;
+}
+
+.list-item span,
+.list-item small {
+  display: block;
+  margin-top: 4px;
+  color: #777;
+}
+
+
+/* 編集・削除 */
+
+.item-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.item-actions button {
+  width: auto;
+  margin: 0;
+  padding: 7px 10px;
+  font-size: 12px;
+}
+
+
+/* =========================
+   編集フォーム
+========================= */
+
+.edit-inputs {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+.edit-inputs input {
+  width: 100%;
+}
+
+.edit-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.edit-actions button {
+  width: auto;
+  white-space: nowrap;
+}
+
+.list-item.is-editing {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 12px;
+}
+
+
+/* =========================
+   個人モード結果
+========================= */
+
+.result-main-card {
+  border: 2px solid #111;
+}
+
+.result-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.result-person {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px;
+  background: #f5f5f5;
+  border-radius: 10px;
+}
+
+.result-person-name {
+  display: block;
+  font-weight: 600;
+}
+
+.result-person small {
+  display: block;
+  margin-top: 3px;
+  color: #777;
+  font-size: 12px;
+}
+
+.result-person strong {
+  font-size: 20px; /* 金額強調 */
+}
+
+
+/* =========================
+   精算方法
+========================= */
+
+.settlement-section {
+  padding: 4px 0 12px;
+}
+
+.settlement-section h3 {
+  margin-top: 0;
+  margin-bottom: 14px;
+  font-size: 18px; /* 強調 */
+}
+
+.settlement-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0;
+  padding: 16px;
+  background: #f7f7f7;
+  border-radius: 12px;
+}
+
+.settlement-flow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.settlement-person {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settlement-person span {
+  font-size: 12px;
+  opacity: 0.65;
+}
+
+.settlement-arrow {
+  font-size: 20px; /* 強調 */
+  opacity: 0.7;
+}
+
+.settlement-row b {
+  margin-left: auto;
+  font-size: 18px; /* 金額強調 */
+  white-space: nowrap;
+}
+
+.settlement-complete {
+  padding: 18px;
+  text-align: center;
+  background: #f1f1f1;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+
+/* =========================
+   団体モード結果
+========================= */
+
+.group-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding: 18px;
+  background: #111;
+  color: #fff;
+  border-radius: 12px;
+}
+
+.group-summary strong {
+  font-size: 22px; /* 合計金額強調 */
+}
+
+.group-rounding-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: #f6f6f6;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #555;
+}
+
+.group-rounding-row select {
+  width: auto;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.group-result-card {
+  margin-bottom: 12px;
+  padding: 20px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 14px;
+}
+
+.group-result-name {
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.group-result-discount {
+  margin-top: 4px;
+  color: #777;
+  font-size: 12px;
+}
+
+.per-person {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 16px 0 10px;
+}
+
+.per-person span {
+  color: #777;
+}
+
+.per-person strong {
+  font-size: 32px; /* 一人あたりの金額強調 */
+  letter-spacing: -1px;
+}
+
+.group-total {
+  color: #777;
+  font-size: 14px;
+}
+
+
+/* =========================
+   支払い一覧
+========================= */
+
+.payment-list-section {
+  margin-bottom: 32px;
+}
+
+.payment-list-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+
+/* 一覧全体 */
+
+.payment-list-card {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+
+/* 支払い1件 */
+
+.payment-list-row {
+  padding: 16px 18px;
+  border-bottom: 1px solid #eee;
+}
+
+.payment-list-row:last-child {
+  border-bottom: none;
+}
+
+
+/* 上段 */
+
+.payment-list-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+
+/* 左側：内容＋編集 */
+
+.payment-list-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.payment-list-info strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+
+/* 金額 */
+
+.payment-list-amount {
+  flex-shrink: 0;
+  font-size: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+
+/* 編集ボタン */
+
+.payment-list-edit-button {
+  width: auto;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0;
+
+  background: transparent;
+  color: #999;
+
+  border: none;
+  border-radius: 0;
+
+  font-size: 12px;
+  font-weight: 400;
+
+  cursor: pointer;
+}
+
+.payment-list-edit-button:hover {
+  background: transparent;
+  color: #333;
+  opacity: 1;
+  text-decoration: underline;
+}
+
+
+/* 建て替えた人 */
+
+.payment-list-payer {
+  display: block;
+  margin-top: 7px;
+  color: #999;
+  font-size: 12px;
+}
+
+
+/* 過去の支払い（折りたたみ）を開くボタン */
+
+.payment-list-more-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 14px;
+  background: #fff;
+  color: #555;
+  border: 1px solid #ddd;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.payment-list-more-button:hover {
+  opacity: 0.8;
+}
+
+.payment-list-more-icon {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: #999;
+  transition: transform 0.2s;
+}
+
+.payment-list-more-button.open .payment-list-more-icon {
+  transform: rotate(180deg);
+}
+
+
+/* =========================
+   支払い明細
+========================= */
+
+.payment-history-item {
+  padding: 18px 0;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.payment-history-item:last-child {
+  border-bottom: none;
+}
+
+.payment-history-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.payment-history-main strong {
+  display: block;
+  font-size: 16px;
+}
+
+.payment-amount {
+  font-size: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.payment-payer {
+  display: block;
+  margin-top: 5px;
+  color: #777;
+  font-size: 12px;
+}
+
+.payment-detail-header {
+  margin-top: 18px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #eee;
+  color: #777;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.payment-detail-list {
+  display: flex;
+  flex-direction: column;
+}
+
+
+/* =========================
+   個人ごとの明細
+========================= */
+
+.payment-person-detail {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 4px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.payment-person-detail:last-child {
+  border-bottom: none;
+}
+
+.payment-person-detail strong {
+  display: block;
+  font-size: 14px;
+}
+
+.payment-person-detail span {
+  display: block;
+  margin-top: 4px;
+  color: #888;
+  font-size: 12px;
+}
+
+.payment-person-detail b {
+  white-space: nowrap;
+}
+
+
+/* =========================
+   参加者ごとの支払い明細
+========================= */
+
+.member-payment-card {
+  margin-bottom: 16px;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 14px;
+}
+
+.member-payment-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px;
+  background: #f7f7f7;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.member-payment-header strong {
+  display: block;
+  font-size: 16px;
+}
+
+.member-payment-header span {
+  display: block;
+  margin-top: 4px;
+  color: #888;
+  font-size: 12px;
+}
+
+.member-payment-header b {
+  font-size: 16px;
+  white-space: nowrap;
+}
+
+.member-payment-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border-bottom: 1px solid #eee;
+}
+
+.member-payment-row:last-child {
+  border-bottom: none;
+}
+
+.member-payment-info {
+  min-width: 0;
+}
+
+.member-payment-info strong {
+  display: block;
+  font-size: 14px;
+}
+
+.member-payment-info span {
+  display: block;
+  margin-top: 5px;
+  color: #777;
+  font-size: 12px;
+}
+
+.member-payment-info small {
+  display: block;
+  margin-top: 4px;
+  color: #999;
+  font-size: 12px;
+}
+
+.member-payment-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.member-payment-right b {
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.debt-amount-receive {
+  color: #1a7f37;
+}
+
+
+/* =========================
+   明細（負担額 / 貸し借り）ブロック
+========================= */
+
+.detail-block {
+  margin-bottom: 28px;
+}
+
+.detail-block:last-child {
+  margin-bottom: 0;
+}
+
+.detail-block-title {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+
+/* 参加者カードのアコーディオン化 */
+
+.member-payment-header.accordion-header {
+  cursor: pointer;
+}
+
+.accordion-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.accordion-caret {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: #999;
+  transition: transform 0.2s;
+}
+
+.member-payment-card.open .accordion-caret {
+  transform: rotate(180deg);
+}
+
+.accordion-rows[hidden] {
+  display: none;
+}
+
+.debt-amount-pay {
+  color: #c0392b;
+}
+
+.payment-edit-button {
+  padding: 6px 10px;
+  background: #eee;
+  color: #333;
+  font-size: 12px;
+}
+
+.payment-edit-button:hover {
+  background: #ddd;
+  opacity: 1;
+}
+
+
+/* =========================
+   団体ごとの明細
+========================= */
+
+.payment-group-detail {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 4px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.payment-group-detail:last-child {
+  border-bottom: none;
+}
+
+.payment-group-name strong {
+  display: block;
+  font-size: 14px;
+}
+
+.payment-group-name span {
+  display: block;
+  margin-top: 4px;
+  color: #888;
+  font-size: 12px;
+}
+
+.payment-group-amount {
+  text-align: right;
+}
+
+.payment-group-amount strong {
+  display: block;
+  font-size: 14px;
+}
+
+.payment-group-amount span {
+  display: block;
+  margin-top: 4px;
+  color: #888;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+
+/* =========================
+   支払い対象者
+========================= */
+
+.payment-member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.payment-member-row:last-child {
+  border-bottom: none;
+}
+
+.payment-member-row .checkbox-label {
+  flex: 1;
+  padding: 8px 0;
+  border: none;
+}
+
+
+/* =========================
+   個別調整
+========================= */
+
+.individual-adjustment {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.individual-adjustment > span:first-child {
+  color: #777;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.individual-adjustment input {
+  width: 70px;
+  margin: 0;
+  padding: 8px 10px;
+  text-align: right;
+}
+
+.individual-adjustment > span:last-child {
+  color: #777;
+  font-size: 14px;
+}
+
+
+/* =========================
+   イベントページ上部
+========================= */
+
+.event-top-nav {
+  margin-bottom: 28px;
+}
+
+.app-back-link {
+  color: #777;
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.app-back-link:hover {
+  opacity: 0.6;
+}
+
+
+/* イベントタイトル */
+
+.event-header {
+  margin-bottom: 28px;
+}
+
+.event-title-area {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.event-label {
+  margin: 0 0 4px;
+  color: #999;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
+
+.event-header h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+
+/* リンクコピー */
+
+.copy-icon-button {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  flex-shrink: 0;
+
+  background: #fff;
+  color: #111;
+
+  border: 1px solid #ddd;
+  border-radius: 10px;
+
+  font-size: 16px;
+}
+
+.copy-icon-button:hover {
+  background: #f5f5f5;
+  opacity: 1;
+}
+
+
+/* イベント設定 */
+
+.event-settings-link {
+  display: inline-block;
+  margin-top: 14px;
+  color: #666;
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.event-settings-link:hover {
+  color: #111;
+}
+
+
+/* =========================
+   支払い追加
+========================= */
+
+.add-payment-section {
+  width: 100%;
+  margin-bottom: 40px;
+}
+
+.add-payment-section .primary-button {
+  width: 100%;
+  padding: 18px 20px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+
+/* =========================
+   その他
+========================= */
+
+.hint {
+  color: #777;
+  font-size: 12px;
+}
+
+.empty {
+  padding: 10px 0;
+  color: #999;
+}
+
+
+/* =========================
+   スマホ
+========================= */
+
+@media (max-width: 600px) {
+
+  /* ヘッダー */
+
+  header {
+    padding: 32px 16px 20px;
+  }
+
+  header h1 {
+    font-size: 24px;
+  }
+
+
+  /* レイアウト */
+
+  main,
+  .mode-section {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .container {
+    padding: 20px 16px;
+  }
+
+  .card {
+    padding: 20px;
+  }
+
+
+  /* 入力 */
+
+  .input-row {
+    flex-direction: column;
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .input-row > input {
+    width: 100%;
+    flex: 1 1 auto;
+  }
+
+  .input-row > button {
+    width: 100%;
+  }
+
+  .discount-input-wrapper {
+    flex-wrap: nowrap;
+    width: 100%;
+  }
+
+  .discount-input-wrapper input {
+    width: 100% !important;
+    min-width: 0;
+    flex: 1 1 auto !important;
+  }
+
+
+  /* リスト */
+
+  .list-item {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .edit-inputs {
+    width: 100%;
+    flex-basis: 100%;
+  }
+
+
+  /* イベント */
+
+  .event-header h1 {
+    font-size: 20px;
+  }
+
+
+  /* 精算 */
+
+  .settlement-row {
+    gap: 7px;
+    padding: 14px;
+  }
+
+  .settlement-row b {
+    font-size: 16px;
+  }
+
+
+  /* 支払い一覧 */
+
+  .payment-list-row {
+    padding: 15px 14px;
+  }
+
+  .payment-list-main {
+    gap: 10px;
+  }
+
+  .payment-list-info {
+    gap: 7px;
+  }
+
+  /* 支払い明細 */
+
+  .payment-history-main {
+    gap: 10px;
+  }
+
+  .payment-group-detail,
+  .payment-person-detail {
+    gap: 12px;
+  }
+
+  .payment-member-row {
+    gap: 10px;
+  }
+
+
+  /* 個別調整 */
+
+  .individual-adjustment {
+    gap: 4px;
+  }
+
+  .individual-adjustment input {
+    width: 55px;
+    padding: 7px 6px;
+  }
+
+
+  /* 参加者別明細 */
+
+  .member-payment-row {
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .member-payment-header {
+    padding: 14px;
+  }
+
+}
+
+/* ========================================
+   支払い一覧のボタン・レイアウト調整
+   ======================================== */
+.payment-summary-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 編集・削除ボタン共通 */
+.payment-summary-edit,
+.payment-summary-delete {
+  padding: 4px 10px;
+  font-size: 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.payment-summary-edit:hover,
+.payment-summary-delete:hover {
+  opacity: 0.8;
+}
+
+/* 編集ボタン */
+.payment-summary-edit {
+  background-color: #6b7280;
+  color: #ffffff;
+}
+
+/* 削除ボタン */
+.payment-summary-delete {
+  background-color: #ef4444;
+  color: #ffffff;
+}
+
+/* ========================================
+   画像風 支払い一覧デザイン
+   ======================================== */
+
+.payment-card-list {
+  display: flex;
+  flex-direction: column;
+  background-color: #ffffff;
+  border-radius: 8px;
+}
+
+.payment-item-card {
+  padding: 16px 16px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.payment-item-card:last-child {
+  border-bottom: none;
+}
+
+.payment-card-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.payment-card-left {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.payment-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.payment-card-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1f2937;
+  line-height: 1.2;
+}
+
+.payment-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* アイコンボタン（編集・削除） */
+.icon-btn {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  cursor: pointer;
+  color: #9ca3af;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.icon-btn.edit-btn:hover {
+  color: #4b5563;
+  background-color: #f3f4f6;
+}
+
+.icon-btn.delete-btn:hover {
+  color: #ef4444;
+  background-color: #fee2e2;
+}
+
+/* サブテキスト（誰が立て替え） */
+.payment-card-sub {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* 参加者アバターバッジ（丸アイコン） */
+.payment-card-badges {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  flex-wrap: wrap;
+}
+
+.participant-badge {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 500;
+  background-color: #ffffff;
+}
+
+/* 色バリエーション（枠線と文字色） */
+.badge-color-0 {
+  border: 1px solid #fda4af;
+  color: #e11d48;
+}
+
+.badge-color-1 {
+  border: 1px solid #93c5fd;
+  color: #2563eb;
+}
+
+.badge-color-2 {
+  border: 1px solid #86efac;
+  color: #16a34a;
+}
+
+.badge-color-3 {
+  border: 1px solid #fde047;
+  color: #ca8a04;
+}
+
+.badge-color-4 {
+  border: 1px solid #c084fc;
+  color: #9333ea;
+}
+
+/* 右側の金額 */
+.payment-card-right {
+  display: flex;
+  align-items: flex-start;
+  padding-top: 2px;
+}
+
+.payment-card-amount {
+  font-size: 18px; /* 金額強調 */
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+/* ========================================
+   フォームボタンの横並び設定
+   ======================================== */
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+  width: 100%;
+}
+
+.form-actions button,
+.form-actions .btn-primary,
+.form-actions .btn-secondary {
+  flex: 1;
+  padding: 12px 16px;
+  font-size: 16px;
+  font-weight: 700;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  text-align: center;
+  transition: opacity 0.2s, background-color 0.2s;
+}
+
+/* メインボタン（変更を保存など） */
+.btn-primary {
+  background-color: #2563eb;
+  color: #ffffff;
+}
+
+/* サブボタン（キャンセルなど） */
+.btn-secondary {
+  background-color: #e5e7eb;
+  color: #374151;
+}
+
+.btn-primary:hover,
+.btn-secondary:hover {
+  opacity: 0.85;
+}
+
+/* =========================
+   折りたたみ（支出の明細 / 貸し借りの明細）
+========================= */
+
+.collapsible-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.collapsible-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 24px;
+  background: #fff;
+  color: #111;
+  border: none;
+  border-radius: 16px;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.collapsible-toggle:hover {
+  opacity: 0.8;
+}
+
+.collapsible-icon {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #999;
+  transition: transform 0.2s;
+}
+
+.collapsible-toggle.open .collapsible-icon {
+  transform: rotate(180deg);
+}
+
+.collapsible-content {
+  padding: 0 24px 24px;
+}
+
+.collapsible-content[hidden] {
+  display: none;
+}
+
+
+/* =========================
+   支出の明細
+========================= */
+
+.expense-participant-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.expense-participant-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f2f2f2;
+}
+
+.expense-participant-row:last-child {
+  border-bottom: none;
+}
+
+.expense-participant-name {
+  display: flex;
+  flex-direction: column;
+}
+
+.expense-participant-name strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.expense-participant-name small {
+  margin-top: 2px;
+  color: #999;
+  font-size: 12px;
+}
+
+.expense-participant-row b {
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+
+/* =========================
+   貸し借りの明細
+========================= */
+
+.debt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.debt-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+  background: #f5f5f5;
+  border-radius: 12px;
+}
+
+.debt-flow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.debt-arrow {
+  color: #999;
+}
+
+.debt-row b {
+  font-size: 18px; /* 金額強調 */
+  white-space: nowrap;
+}
+
+
+/* =========================
+   必須項目マーク
+========================= */
+
+.required-mark {
+  color: #d32f2f;
+  font-weight: bold;
+}
+
+.required-note {
+  margin: 0 0 10px;
+  color: #777;
+  font-size: 12px;
+}
+
+/* 必須入力欄は左端を赤線で強調 */
+.required-input {
+  border-left: 3px solid #d32f2f;
+}
+
+
+/* =========================
+   実額からの逆算
+========================= */
+
+.back-calc-box {
+  margin-bottom: 16px;
+  padding: 14px;
+  background: #f6f6f6;
+  border-radius: 10px;
+}
+
+.back-calc-title {
+  margin: 0 0 6px;
+  font-weight: bold;
+  font-size: 14px;
+}

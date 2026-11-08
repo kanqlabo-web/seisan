@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <title>支払いを追加 | 清算くん</title>
+
+  <link
+    rel="stylesheet"
+    href="style.css"
+  >
+
+</head>
+
+
+<body>
+
+  <header>
+
+    <h1>支払いを追加</h1>
+
+    <p>
+      参加グループ全体の支払いを登録します
+    </p>
+
+  </header>
+
+
+  <main class="container">
+
+
+    <div class="card">
+
+      <h2>
+        支払い情報
+      </h2>
+
+      <p class="required-note">
+        <span class="required-mark">*</span> は必須項目です
+      </p>
+
+
+      <!-- 内容 -->
+
+      <label>
+
+        内容
+
+        <input
+          type="text"
+          id="description"
+          placeholder="例：会場代"
+        >
+
+      </label>
+
+
+      <!-- 金額 -->
+
+      <label>
+
+        金額 <span class="required-mark" aria-label="必須">*</span>
+
+        <input
+          type="number"
+          id="amount"
+          class="required-input"
+          placeholder="例：30000"
+          min="1"
+        >
+
+      </label>
+
+
+      <!-- 建て替えた人 -->
+
+      <label>
+
+        建て替えた人
+
+        <input
+          type="text"
+          id="payerName"
+          placeholder="例：山田"
+        >
+
+      </label>
+
+
+      <p class="hint">
+
+        ※金額は各参加グループの人数と負担割合に応じて
+        自動的に配分されます
+
+      </p>
+
+
+      <button
+        id="addPaymentButton"
+        class="primary-button"
+      >
+
+        支払いを追加
+
+      </button>
+
+
+    </div>
+
+
+    <button
+      id="backButton"
+      class="secondary-button"
+    >
+
+      ← イベントページに戻る
+
+    </button>
+
+
+  </main>
+
+
+  <script
+    type="module"
+    src="group-payment.js"
+  ></script>
+
+
+</body>
+
+</html>
