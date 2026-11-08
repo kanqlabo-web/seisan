@@ -1,1702 +1,302 @@
-// ========================================
-// 清算くん
-// 支払い追加・編集
-// ========================================
+import { db } from "./firebase.js";
+import { doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+import { scanReceipt } from "./receiptScan_tmp.js";
 
-
-import { db } from
-  "./firebase.js";
-
-
-import {
-
-  doc,
-
-  getDoc,
-
-  updateDoc,
-
-  arrayUnion
-
-} from
-  "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
-
-
-// ========================================
-// URL
-// ========================================
-
-const params =
-  new URLSearchParams(
-    window.location.search
-  );
-
-
-const eventId =
-  params.get("id");
-
-
-const paymentId =
-  params.get("paymentId");
-
-
-// ========================================
-// URL確認
-// ========================================
+const params = new URLSearchParams(window.location.search);
+const eventId = params.get("id");
+const paymentId = params.get("paymentId");
 
 if (!eventId) {
-
-  alert(
-    "イベントが見つかりません"
-  );
-
-
-  window.location.href =
-    "index.html";
-
+  alert("イベントが見つかりません");
+  window.location.href = "index.html";
 }
 
+const pageTitle = document.getElementById("pageTitle");
+const payer = document.getElementById("payer");
+const amount = document.getElementById("amount");
+const description = document.getElementById("description");
+const paymentStatusOptions = document.getElementById("paymentStatusOptions");
+const paymentMembers = document.getElementById("paymentMembers");
+const savePaymentButton = document.getElementById("savePaymentButton");
+const backLink = document.getElementById("backLink");
+backLink.href = `event.html?id=${eventId}`;
 
-// ========================================
-// 要素
-// ========================================
+const receiptInput = document.getElementById("receiptInput");
+const scanReceiptButton = document.getElementById("scanReceiptButton");
+const receiptScanStatus = document.getElementById("receiptScanStatus");
 
-const pageTitle =
-  document.getElementById(
-    "pageTitle"
-  );
+scanReceiptButton.addEventListener("click", () => receiptInput.click());
+receiptInput.addEventListener("change", async () => {
+  const file = receiptInput.files[0];
+  if (!file) return;
 
+  scanReceiptButton.disabled = true;
+  receiptScanStatus.hidden = false;
+  receiptScanStatus.textContent = "解析中...";
+  try {
+    const result = await scanReceipt(file);
+    if (result.store) description.value = result.store;
+    if (result.total) amount.value = result.total;
+    receiptScanStatus.textContent = "読み取りました。内容をご確認ください。";
+  } catch (e) {
+    console.error(e);
+    alert(e.message || "レシートの解析に失敗しました");
+    receiptScanStatus.hidden = true;
+  } finally {
+    scanReceiptButton.disabled = false;
+    receiptInput.value = "";
+  }
+});
 
-const payer =
-  document.getElementById(
-    "payer"
-  );
+const splitModeButton = document.getElementById("splitModeButton");
+const exactModeButton = document.getElementById("exactModeButton");
+const modeHint = document.getElementById("modeHint");
+const amountFieldGroup = document.getElementById("amountFieldGroup");
+const statusCard = document.getElementById("statusCard");
+const exactModeDescription = document.getElementById("exactModeDescription");
+const exactTotalDisplay = document.getElementById("exactTotalDisplay");
 
-
-const amount =
-  document.getElementById(
-    "amount"
-  );
-
-
-const description =
-  document.getElementById(
-    "description"
-  );
-
-
-const paymentStatusOptions =
-  document.getElementById(
-    "paymentStatusOptions"
-  );
-
-
-const paymentMembers =
-  document.getElementById(
-    "paymentMembers"
-  );
-
-
-const savePaymentButton =
-  document.getElementById(
-    "savePaymentButton"
-  );
-
-
-const backLink =
-  document.getElementById(
-    "backLink"
-  );
-
-
-backLink.href =
-  `event.html?id=${eventId}`;
-
-
-// ========================================
-// 入力モード（割り勘 / 個別金額）
-// ========================================
-
-const splitModeButton =
-  document.getElementById(
-    "splitModeButton"
-  );
-
-
-const exactModeButton =
-  document.getElementById(
-    "exactModeButton"
-  );
-
-
-const modeHint =
-  document.getElementById(
-    "modeHint"
-  );
-
-
-const amountFieldGroup =
-  document.getElementById(
-    "amountFieldGroup"
-  );
-
-
-const statusCard =
-  document.getElementById(
-    "statusCard"
-  );
-
-
-const exactModeDescription =
-  document.getElementById(
-    "exactModeDescription"
-  );
-
-
-const exactTotalDisplay =
-  document.getElementById(
-    "exactTotalDisplay"
-  );
-
-
-// "equal"：割り勘モード / "exact"：個別金額モード
-
-let currentSplitMode =
-  "equal";
-
-
+let currentSplitMode = "equal";
 function updateModeUI() {
-
-  const isExact =
-    currentSplitMode === "exact";
-
-
-  splitModeButton.classList.toggle(
-    "active",
-    !isExact
-  );
-
-  exactModeButton.classList.toggle(
-    "active",
-    isExact
-  );
-
-
-  amountFieldGroup.hidden =
-    isExact;
-
-  statusCard.hidden =
-    isExact;
-
-  exactModeDescription.hidden =
-    !isExact;
-
-  exactTotalDisplay.hidden =
-    !isExact;
-
-
-  modeHint.textContent =
-    isExact
-
-      ? "参加者ごとに金額を直接入力します（例：同じ店で別々のものを頼んだ場合）"
-
-      : "参加者全員で金額を割り勘します（ステータス割引が適用されます）";
-
+  const isExact = currentSplitMode === "exact";
+  splitModeButton.classList.toggle("active", !isExact);
+  exactModeButton.classList.toggle("active", isExact);
+  amountFieldGroup.hidden = isExact;
+  statusCard.hidden = isExact;
+  exactModeDescription.hidden = !isExact;
+  exactTotalDisplay.hidden = !isExact;
+  modeHint.textContent = isExact ? "参加者ごとに金額を直接入力します（例：同じ店で別々のものを頼んだ場合）" : "参加者全員で金額を割り勘します（ステータス割引が適用されます）";
 }
 
+splitModeButton.addEventListener("click", () => {
+  if (currentSplitMode === "equal") return;
+  currentSplitMode = "equal";
+  updateModeUI(); renderMembers();
+});
 
-splitModeButton.addEventListener(
-  "click",
-  () => {
+exactModeButton.addEventListener("click", () => {
+  if (currentSplitMode === "exact") return;
+  currentSplitMode = "exact";
+  updateModeUI(); renderMembers();
+});
 
-    if (
-      currentSplitMode === "equal"
-    ) {
-
-      return;
-
-    }
-
-
-    currentSplitMode =
-      "equal";
-
-
-    updateModeUI();
-
-    renderMembers();
-
-  }
-);
-
-
-exactModeButton.addEventListener(
-  "click",
-  () => {
-
-    if (
-      currentSplitMode === "exact"
-    ) {
-
-      return;
-
-    }
-
-
-    currentSplitMode =
-      "exact";
-
-
-    updateModeUI();
-
-    renderMembers();
-
-  }
-);
-
-
-// ========================================
-// データ
-// ========================================
-
-let statuses = [];
-
-let members = [];
-
-let payments = [];
-
-let editingPayment =
-  null;
-
-
-// ========================================
-// 編集モード表示
-// ========================================
+let statuses = [], members = [], payments = [], editingPayment = null;
 
 if (paymentId) {
-
-  pageTitle.textContent =
-    "支払いを編集";
-
-
-  document.title =
-    "支払いを編集";
-
-
-  savePaymentButton.textContent =
-    "変更を保存";
-
+  pageTitle.textContent = "支払いを編集";
+  document.title = "支払いを編集";
+  savePaymentButton.textContent = "変更を保存";
 }
 
-
-// ========================================
-// 割引
-// ========================================
-
-function formatDiscount(discount) {
-
-  discount =
-    Number(discount);
-
-
-  if (discount > 0) {
-
-    return `${discount}%引き`;
-
-  }
-
-
-  if (discount < 0) {
-
-    return `${Math.abs(discount)}%増し`;
-
-  }
-
-
+function createId() { return Date.now().toString() + Math.random().toString(16).slice(2); }
+const discountToRatio = d => 1 - Number(d) / 100;
+function formatDiscount(d) {
+  d = Number(d);
+  if (d > 0) return `${d}%引き`;
+  if (d < 0) return `${Math.abs(d)}%増し`;
   return "通常";
-
 }
 
-
-function discountToRatio(discount) {
-
-  return (
-    1 -
-    Number(discount) / 100
-  );
-
+function renderPayerOptions() {
+  payer.innerHTML = members.map(m => `<option value="${m.id}">${m.name}</option>`).join("");
+  if (editingPayment) payer.value = editingPayment.payerId || "";
 }
 
+function renderStatusOptions() {
+  paymentStatusOptions.innerHTML = "";
+  statuses.forEach(s => {
+    const checked = editingPayment
+      ? (editingPayment.appliedStatusIds ? editingPayment.appliedStatusIds.includes(s.id) : true)
+      : true;
+    const label = document.createElement("label");
+    label.className = "checkbox-label";
+    label.innerHTML = `<input type="checkbox" value="${s.id}" ${checked ? "checked" : ""}><span>${s.name}（${formatDiscount(s.discount)}）</span>`;
+    paymentStatusOptions.appendChild(label);
+  });
 
-// ========================================
-// Firebase読み込み
-// ========================================
-
-async function loadEvent() {
-
-  try {
-
-    const eventRef =
-      doc(
-        db,
-        "events",
-        eventId
-      );
-
-
-    const snapshot =
-      await getDoc(
-        eventRef
-      );
-
-
-    if (!snapshot.exists()) {
-
-      alert(
-        "イベントが見つかりません"
-      );
-
-      return;
-
-    }
-
-
-    const eventData =
-      snapshot.data();
-
-
-    statuses =
-      eventData.statuses || [];
-
-
-    members =
-      eventData.members || [];
-
-
-    payments =
-      eventData.payments || [];
-
-
-    // ====================================
-    // 編集対象取得
-    // ====================================
-
-    if (paymentId) {
-
-      editingPayment =
-        payments.find(
-          payment =>
-            payment.id === paymentId
-        );
-
-
-      if (!editingPayment) {
-
-        alert(
-          "支払い情報が見つかりません"
-        );
-
-
-        window.location.href =
-          `event.html?id=${eventId}`;
-
-        return;
-
-      }
-
-    }
-
-
-    currentSplitMode =
-      editingPayment &&
-      editingPayment.mode === "exact"
-
-        ? "exact"
-
-        : "equal";
-
-
-    updateModeUI();
-
-    renderPayer();
-
-    renderStatuses();
-
-    renderMembers();
-
-    fillEditingData();
-
-  }
-
-  catch (error) {
-
-    console.error(error);
-
-
-    alert(
-      "データの読み込みに失敗しました"
-    );
-
-  }
-
+  // ここでのチェック状態が変わったら、対象者一覧に表示中の適用ステータス・割引率も追従させる
+  paymentStatusOptions.querySelectorAll("input[type=checkbox]").forEach(cb => {
+    cb.addEventListener("change", () => {
+      if (currentSplitMode === "equal") renderMembers();
+    });
+  });
 }
 
-
-// ========================================
-// 支払った人
-// ========================================
-
-function renderPayer() {
-
-  payer.innerHTML =
-    `<option value="">選択してください</option>`;
-
-
-  members.forEach(
-    member => {
-
-      const option =
-        document.createElement(
-          "option"
-        );
-
-
-      option.value =
-        member.id;
-
-
-      option.textContent =
-        member.name;
-
-
-      if (
-
-        editingPayment &&
-
-        editingPayment.payerId ===
-        member.id
-
-      ) {
-
-        option.selected =
-          true;
-
-      }
-
-
-      payer.appendChild(
-        option
-      );
-
-    }
-  );
-
+// このページで現在チェックされている「この支払いで使用するステータス」のIDを取得
+function getCheckedStatusIds() {
+  return Array.from(paymentStatusOptions.querySelectorAll("input[type=checkbox]:checked")).map(cb => cb.value);
 }
 
-
-// ========================================
-// ステータス
-// ========================================
-
-function renderStatuses() {
-
-  paymentStatusOptions.innerHTML =
-    "";
-
-
-  statuses.forEach(
-    status => {
-
-      const label =
-        document.createElement(
-          "label"
-        );
-
-
-      label.className =
-        "checkbox-label";
-
-
-      const checkbox =
-        document.createElement(
-          "input"
-        );
-
-
-      checkbox.type =
-        "checkbox";
-
-
-      checkbox.value =
-        status.id;
-
-
-      const text =
-        document.createElement(
-          "span"
-        );
-
-
-      text.textContent =
-        `${status.name}（${formatDiscount(
-          status.discount
-        )}）`;
-
-
-      label.appendChild(
-        checkbox
-      );
-
-
-      label.appendChild(
-        text
-      );
-
-
-      paymentStatusOptions.appendChild(
-        label
-      );
-
-    }
-  );
-
+// 対象者mが持つステータスのうち、この支払いで実際に適用される（チェックされている）ものだけを返す
+function getMemberAppliedStatuses(m) {
+  const checkedIds = getCheckedStatusIds();
+  return (m.statuses || [])
+    .filter(id => checkedIds.includes(id))
+    .map(id => statuses.find(s => s.id === id))
+    .filter(Boolean);
 }
 
-
-// ========================================
-// 対象者
-// ========================================
+function updateExactTotalDisplay() {
+  const total = Array.from(paymentMembers.querySelectorAll(".exact-amount-input"))
+    .reduce((sum, input) => sum + (Number(input.value) || 0), 0);
+  exactTotalDisplay.textContent = `合計：¥${total.toLocaleString()}`;
+}
 
 function renderMembers() {
-
-  paymentMembers.innerHTML =
-    "";
-
-
-  members.forEach(
-    member => {
-
-      const row =
-        document.createElement(
-          "div"
-        );
-
-
-      row.className =
-        "payment-member-row";
-
-
-      // ================================
-      // チェックボックス
-      // ================================
-
-      const label =
-        document.createElement(
-          "label"
-        );
-
-
-      label.className =
-        "checkbox-label";
-
-
-      const checkbox =
-        document.createElement(
-          "input"
-        );
-
-
-      checkbox.type =
-        "checkbox";
-
-
-      checkbox.value =
-        member.id;
-
-
-      // 新規なら全員選択
-
-      checkbox.checked =
-        !editingPayment;
-
-
-      const name =
-        document.createElement(
-          "span"
-        );
-
-
-      name.textContent =
-        member.name;
-
-
-      label.appendChild(
-        checkbox
-      );
-
-
-      label.appendChild(
-        name
-      );
-
-
-      // ================================
-      // 個別調整（割り勘モード）
-      // または個別金額（個別金額モード）
-      // ================================
-
-      const adjustment =
-        document.createElement(
-          "div"
-        );
-
-
-      adjustment.className =
-        "individual-adjustment";
-
-
-      const adjustmentLabel =
-        document.createElement(
-          "span"
-        );
-
-
-      const valueInput =
-        document.createElement(
-          "input"
-        );
-
-
-      valueInput.type =
-        "number";
-
-
-      valueInput.value =
-        0;
-
-
-      const unit =
-        document.createElement(
-          "span"
-        );
-
-
-      if (
-        currentSplitMode === "exact"
-      ) {
-
-        adjustmentLabel.textContent =
-          "金額";
-
-
-        valueInput.min =
-          0;
-
-
-        valueInput.placeholder =
-          "0";
-
-
-        valueInput.className =
-          "exact-amount-input";
-
-
-        unit.textContent =
-          "円";
-
-
-        checkbox.addEventListener(
-          "change",
-          updateExactTotal
-        );
-
-
-        valueInput.addEventListener(
-          "input",
-          updateExactTotal
-        );
-
-      } else {
-
-        adjustmentLabel.textContent =
-          "個別調整";
-
-
-        valueInput.min =
-          -100;
-
-
-        valueInput.max =
-          100;
-
-
-        valueInput.placeholder =
-          "0";
-
-
-        unit.textContent =
-          "%";
-
-      }
-
-
-      adjustment.appendChild(
-        adjustmentLabel
-      );
-
-
-      adjustment.appendChild(
-        valueInput
-      );
-
-
-      adjustment.appendChild(
-        unit
-      );
-
-
-      row.appendChild(
-        label
-      );
-
-
-      row.appendChild(
-        adjustment
-      );
-
-
-      paymentMembers.appendChild(
-        row
-      );
-
+  const isExact = currentSplitMode === "exact";
+  const findExistingParticipant = id => editingPayment?.participants?.find(pt => pt.id === id);
+
+  // ステータスのチェック変更などで再描画しても、入力済みの選択・数値が消えないよう一旦保持する
+  const priorState = {};
+  paymentMembers.querySelectorAll(".participant-checkbox").forEach(cb => {
+    priorState[cb.dataset.memberId] = { ...(priorState[cb.dataset.memberId] || {}), checked: cb.checked };
+  });
+  paymentMembers.querySelectorAll(".individual-discount-input").forEach(input => {
+    priorState[input.dataset.memberId] = { ...(priorState[input.dataset.memberId] || {}), individualDiscount: input.value };
+  });
+  paymentMembers.querySelectorAll(".exact-amount-input").forEach(input => {
+    priorState[input.dataset.memberId] = { ...(priorState[input.dataset.memberId] || {}), exactAmount: input.value };
+  });
+
+  paymentMembers.innerHTML = "";
+
+  members.forEach(m => {
+    const existing = findExistingParticipant(m.id);
+    const prior = priorState[m.id];
+    const row = document.createElement("div");
+    row.className = "payment-member-row";
+
+    if (isExact) {
+      const amountValue = prior && prior.exactAmount !== undefined ? prior.exactAmount : (existing ? Math.round(existing.weight) : "");
+      row.innerHTML = `
+        <span>${m.name}</span>
+        <input type="number" class="exact-amount-input" data-member-id="${m.id}" min="0" placeholder="金額" value="${amountValue}" style="width:120px;">`;
+    } else {
+      const checked = prior ? prior.checked : (existing ? true : !editingPayment);
+      // この支払いで実際に使うステータス（チェック済みのもの）だけを、名前と割引率つきで表示する
+      const appliedStatuses = getMemberAppliedStatuses(m);
+      const appliedDiscount = appliedStatuses.reduce((sum, st) => sum + Number(st.discount), 0);
+      const statusLabel = appliedStatuses.length
+        ? `（${appliedStatuses.map(st => st.name).join("/")}・${formatDiscount(appliedDiscount)}）`
+        : "";
+      const individualDiscountValue = prior && prior.individualDiscount !== undefined ? prior.individualDiscount : (existing?.individualDiscount || 0);
+      row.innerHTML = `
+        <label class="checkbox-label" style="flex:1;border:none;padding:8px 0;">
+          <input type="checkbox" class="participant-checkbox" data-member-id="${m.id}" ${checked ? "checked" : ""}>
+          <span>${m.name}${statusLabel}</span>
+        </label>
+        <div class="individual-adjustment">
+          <span>個別割引</span>
+          <input type="number" class="individual-discount-input" data-member-id="${m.id}" value="${individualDiscountValue}">
+          <span>%</span>
+        </div>`;
     }
-  );
+    paymentMembers.appendChild(row);
+  });
 
-
-  if (
-    currentSplitMode === "exact"
-  ) {
-
-    updateExactTotal();
-
+  if (isExact) {
+    paymentMembers.querySelectorAll(".exact-amount-input").forEach(input => {
+      input.addEventListener("input", updateExactTotalDisplay);
+    });
+    updateExactTotalDisplay();
   }
-
 }
 
+async function init() {
+  try {
+    const snapshot = await getDoc(doc(db, "events", eventId));
+    if (!snapshot.exists()) { alert("イベントが見つかりません"); location.href = "index.html"; return; }
 
-// ========================================
-// 個別金額モードの合計金額表示
-// ========================================
+    const data = snapshot.data();
+    statuses = data.statuses || [];
+    members = data.members || [];
+    payments = data.payments || [];
 
-function updateExactTotal() {
+    if (!members.length) {
+      alert("参加者がいません。先にイベントページで参加者を追加してください");
+      location.href = `index.html?id=${eventId}`;
+      return;
+    }
 
-  let total =
-    0;
+    if (paymentId) {
+      editingPayment = payments.find(p => p.id === paymentId) || null;
+      if (!editingPayment) { alert("支払いが見つかりません"); location.href = `event.html?id=${eventId}`; return; }
+      amount.value = editingPayment.amount ?? "";
+      description.value = editingPayment.description || "";
+    }
 
-
-  paymentMembers
-    .querySelectorAll(
-      ".payment-member-row"
-    )
-    .forEach(
-      row => {
-
-        const checkbox =
-          row.querySelector(
-            'input[type="checkbox"]'
-          );
-
-
-        const yenInput =
-          row.querySelector(
-            ".exact-amount-input"
-          );
-
-
-        if (
-          checkbox &&
-          checkbox.checked &&
-          yenInput
-        ) {
-
-          total +=
-            Number(
-              yenInput.value
-            ) || 0;
-
-        }
-
-      }
-    );
-
-
-  exactTotalDisplay.textContent =
-    `合計金額：¥${total.toLocaleString()}`;
-
+    renderPayerOptions();
+    renderStatusOptions();
+    renderMembers();
+  } catch (e) {
+    console.error(e);
+    alert("データの読み込みに失敗しました");
+  }
 }
+init();
 
+savePaymentButton.addEventListener("click", async () => {
+  const payerId = payer.value;
+  const desc = description.value.trim();
+  if (!payerId) return alert("支払った人を選択してください");
 
-// ========================================
-// 編集データ反映
-// ========================================
+  let participants = [];
+  let totalAmount = 0;
+  let appliedStatusIds = [];
 
-function fillEditingData() {
+  if (currentSplitMode === "exact") {
+    paymentMembers.querySelectorAll(".exact-amount-input").forEach(input => {
+      const val = Number(input.value);
+      if (val > 0) {
+        participants.push({ id: input.dataset.memberId, weight: val, individualDiscount: 0 });
+        totalAmount += val;
+      }
+    });
+    if (!participants.length) return alert("支払い対象者の金額を入力してください");
+  } else {
+    const amt = Number(amount.value);
+    if (!amt || amt <= 0) return alert("正しい金額を入力してください");
 
-  if (!editingPayment) {
+    appliedStatusIds = Array.from(paymentStatusOptions.querySelectorAll("input[type=checkbox]:checked")).map(cb => cb.value);
 
-    return;
-
+    paymentMembers.querySelectorAll(".participant-checkbox:checked").forEach(cb => {
+      const memberId = cb.dataset.memberId;
+      const member = members.find(m => m.id === memberId);
+      const indivInput = paymentMembers.querySelector(`.individual-discount-input[data-member-id="${memberId}"]`);
+      const individualDiscount = Number(indivInput?.value || 0);
+      const statusDiscount = member
+        ? (member.statuses || [])
+            .filter(id => appliedStatusIds.includes(id))
+            .reduce((sum, id) => { const st = statuses.find(s => s.id === id); return sum + (st ? Number(st.discount) : 0); }, 0)
+        : 0;
+      const weight = Math.max(discountToRatio(statusDiscount + individualDiscount), 0);
+      participants.push({ id: memberId, weight, individualDiscount });
+    });
+    if (!participants.length) return alert("支払い対象者を選択してください");
+    totalAmount = amt;
   }
 
+  const payerMember = members.find(m => m.id === payerId);
+  const newPayment = {
+    id: paymentId || createId(),
+    payerId,
+    payerName: payerMember ? payerMember.name : "未設定",
+    amount: totalAmount,
+    description: desc,
+    participants,
+    appliedStatusIds,
+    createdAt: editingPayment ? (editingPayment.createdAt || new Date()) : new Date()
+  };
 
-  // 金額
+  const updatedPayments = paymentId
+    ? payments.map(p => p.id === paymentId ? newPayment : p)
+    : [...payments, newPayment];
 
-  amount.value =
-    editingPayment.amount;
-
-
-  // 内容
-
-  description.value =
-    editingPayment.description || "";
-
-
-  // ====================================
-  // 適用ステータス（割り勘モードのみ）
-  // ====================================
-
-  if (
-    currentSplitMode !== "exact"
-  ) {
-
-    const appliedStatusIds =
-      editingPayment.appliedStatusIds || [];
-
-
-    paymentStatusOptions
-      .querySelectorAll(
-        'input[type="checkbox"]'
-      )
-      .forEach(
-        checkbox => {
-
-          checkbox.checked =
-            appliedStatusIds.includes(
-              checkbox.value
-            );
-
-        }
-      );
-
+  try {
+    await updateDoc(doc(db, "events", eventId), { payments: updatedPayments });
+    location.href = `event.html?id=${eventId}`;
+  } catch (error) {
+    console.error(error);
+    alert("支払いの保存に失敗しました");
   }
-
-
-  // ====================================
-  // 参加者
-  // ====================================
-
-  editingPayment.participants.forEach(
-    participant => {
-
-      const rows =
-        paymentMembers.querySelectorAll(
-          ".payment-member-row"
-        );
-
-
-      rows.forEach(
-        row => {
-
-          const checkbox =
-            row.querySelector(
-              'input[type="checkbox"]'
-            );
-
-
-          if (
-            checkbox.value ===
-            participant.id
-          ) {
-
-            checkbox.checked =
-              true;
-
-
-            const valueInput =
-              row.querySelector(
-                'input[type="number"]'
-              );
-
-
-            if (
-              currentSplitMode === "exact"
-            ) {
-
-              const restoredAmount =
-                participant.individualAmount !== undefined
-
-                  ? participant.individualAmount
-
-                  : participant.weight;
-
-
-              if (
-                restoredAmount !== undefined
-              ) {
-
-                valueInput.value =
-                  restoredAmount;
-
-              }
-
-            } else if (
-
-              participant.individualDiscount !==
-              undefined
-
-            ) {
-
-              valueInput.value =
-                participant.individualDiscount;
-
-            }
-
-          }
-
-        }
-      );
-
-    }
-  );
-
-
-  // ====================================
-  // 保存されていない参加者はOFF
-  // ====================================
-
-  const participantIds =
-    editingPayment.participants.map(
-      participant =>
-        participant.id
-    );
-
-
-  paymentMembers
-    .querySelectorAll(
-      ".payment-member-row"
-    )
-    .forEach(
-      row => {
-
-        const checkbox =
-          row.querySelector(
-            'input[type="checkbox"]'
-          );
-
-
-        if (
-          !participantIds.includes(
-            checkbox.value
-          )
-        ) {
-
-          checkbox.checked =
-            false;
-
-        }
-
-      }
-    );
-
-
-  if (
-    currentSplitMode === "exact"
-  ) {
-
-    updateExactTotal();
-
-  }
-
-}
-
-
-// ========================================
-// 支払い保存
-// ========================================
-
-savePaymentButton.addEventListener(
-  "click",
-  async () => {
-
-    const payerId =
-      payer.value;
-
-
-    const paymentAmount =
-      Number(
-        amount.value
-      );
-
-
-    const paymentDescription =
-      description.value.trim();
-
-
-    // ====================================
-    // バリデーション
-    // ====================================
-
-    if (!payerId) {
-
-      alert(
-        "支払った人を選択してください"
-      );
-
-      return;
-
-    }
-
-
-    // ====================================
-    // 個別金額モードの保存
-    // ====================================
-
-    if (
-      currentSplitMode === "exact"
-    ) {
-
-      const exactParticipants =
-        [];
-
-      let exactTotalAmount =
-        0;
-
-
-      paymentMembers
-        .querySelectorAll(
-          ".payment-member-row"
-        )
-        .forEach(
-          row => {
-
-            const checkbox =
-              row.querySelector(
-                'input[type="checkbox"]'
-              );
-
-
-            const yenInput =
-              row.querySelector(
-                ".exact-amount-input"
-              );
-
-
-            if (
-              !checkbox.checked ||
-              !yenInput
-            ) {
-
-              return;
-
-            }
-
-
-            const member =
-              members.find(
-                member =>
-                  member.id ===
-                  checkbox.value
-              );
-
-
-            if (!member) {
-
-              return;
-
-            }
-
-
-            const individualAmount =
-              Number(
-                yenInput.value
-              ) || 0;
-
-
-            if (
-              individualAmount <= 0
-            ) {
-
-              return;
-
-            }
-
-
-            exactTotalAmount +=
-              individualAmount;
-
-
-            exactParticipants.push({
-
-              id:
-                member.id,
-
-              name:
-                member.name,
-
-              weight:
-                individualAmount,
-
-              individualAmount,
-
-              individualDiscount:
-                0,
-
-              appliedStatusIds:
-                []
-
-            });
-
-          }
-        );
-
-
-      if (
-        exactParticipants.length === 0
-      ) {
-
-        alert(
-          "金額を入力した対象者がいません"
-        );
-
-        return;
-
-      }
-
-
-      const payerMember =
-        members.find(
-          member =>
-            member.id === payerId
-        );
-
-
-      const exactPayment = {
-
-        id:
-
-          editingPayment
-
-            ? editingPayment.id
-
-            : crypto.randomUUID(),
-
-
-        payerId,
-
-
-        payerName:
-          payerMember.name,
-
-
-        amount:
-          exactTotalAmount,
-
-
-        description:
-          paymentDescription,
-
-
-        // 個別金額モードでは
-        // ステータス割引は使用しない
-        mode:
-          "exact",
-
-        appliedStatusIds:
-          [],
-
-
-        participants:
-          exactParticipants,
-
-
-        createdAt:
-
-          editingPayment
-
-            ? editingPayment.createdAt
-
-            : new Date().toISOString(),
-
-
-        updatedAt:
-          new Date().toISOString()
-
-      };
-
-
-      try {
-
-        const eventRef =
-          doc(
-            db,
-            "events",
-            eventId
-          );
-
-
-        if (editingPayment) {
-
-          const updatedPayments =
-            payments.map(
-              item =>
-
-                item.id ===
-                editingPayment.id
-
-                  ? exactPayment
-
-                  : item
-            );
-
-
-          await updateDoc(
-
-            eventRef,
-
-            {
-
-              payments:
-                updatedPayments
-
-            }
-
-          );
-
-        }
-
-        else {
-
-          await updateDoc(
-
-            eventRef,
-
-            {
-
-              payments:
-                arrayUnion(
-                  exactPayment
-                )
-
-            }
-
-          );
-
-        }
-
-
-        window.location.href =
-          `event.html?id=${eventId}`;
-
-      }
-
-      catch (error) {
-
-        console.error(error);
-
-
-        alert(
-          editingPayment
-
-            ? "支払いの更新に失敗しました"
-
-            : "支払いの保存に失敗しました"
-        );
-
-      }
-
-
-      return;
-
-    }
-
-
-    if (
-
-      !paymentAmount ||
-
-      paymentAmount <= 0
-
-    ) {
-
-      alert(
-        "正しい金額を入力してください"
-      );
-
-      return;
-
-    }
-
-
-    // ====================================
-    // 適用ステータス
-    // ====================================
-
-    const appliedStatusIds =
-      Array.from(
-
-        paymentStatusOptions
-          .querySelectorAll(
-            "input:checked"
-          )
-
-      )
-      .map(
-        checkbox =>
-          checkbox.value
-      );
-
-
-    // ====================================
-    // 対象者作成
-    // ====================================
-
-    const participants =
-      [];
-
-
-    paymentMembers
-      .querySelectorAll(
-        ".payment-member-row"
-      )
-      .forEach(
-        row => {
-
-          const checkbox =
-            row.querySelector(
-              'input[type="checkbox"]'
-            );
-
-
-          const discountInput =
-            row.querySelector(
-              'input[type="number"]'
-            );
-
-
-          if (
-            !checkbox.checked
-          ) {
-
-            return;
-
-          }
-
-
-          const member =
-            members.find(
-              member =>
-                member.id ===
-                checkbox.value
-            );
-
-
-          if (!member) {
-
-            return;
-
-          }
-
-
-          const individualDiscount =
-            Number(
-              discountInput.value
-            ) || 0;
-
-
-          if (
-
-            individualDiscount < -100 ||
-
-            individualDiscount > 100
-
-          ) {
-
-            alert(
-              "個別調整は-100〜100で入力してください"
-            );
-
-
-            throw new Error(
-              "Invalid individual discount"
-            );
-
-          }
-
-
-          let weight =
-            1;
-
-
-          // ==============================
-          // この人に実際に適用される
-          // ステータスだけ取得
-          // ==============================
-
-          const memberAppliedStatusIds =
-            (member.statuses || [])
-              .filter(
-                statusId =>
-                  appliedStatusIds.includes(
-                    statusId
-                  )
-              );
-
-
-          // ==============================
-          // ステータス適用
-          // ==============================
-
-          memberAppliedStatusIds.forEach(
-            statusId => {
-
-              const status =
-                statuses.find(
-                  status =>
-                    status.id ===
-                    statusId
-                );
-
-
-              if (status) {
-
-                weight *=
-                  discountToRatio(
-                    status.discount
-                  );
-
-              }
-
-            }
-          );
-
-
-          // ==============================
-          // 個別調整
-          // ==============================
-
-          weight *=
-            discountToRatio(
-              individualDiscount
-            );
-
-
-          // ==============================
-          // 参加者保存
-          // ==============================
-
-          participants.push({
-
-            id:
-              member.id,
-
-
-            name:
-              member.name,
-
-
-            weight,
-
-
-            individualDiscount,
-
-
-            // この支払いで実際に
-            // 発揮されたステータス
-            appliedStatusIds:
-              memberAppliedStatusIds
-
-          });
-
-        }
-      );
-
-
-    // ====================================
-    // 対象者確認
-    // ====================================
-
-    if (
-      participants.length === 0
-    ) {
-
-      alert(
-        "対象者を選択してください"
-      );
-
-      return;
-
-    }
-
-
-    // ====================================
-    // 支払者
-    // ====================================
-
-    const payerMember =
-      members.find(
-        member =>
-          member.id === payerId
-      );
-
-
-    // ====================================
-    // 新しい支払いデータ
-    // ====================================
-
-    const payment = {
-
-      id:
-
-        editingPayment
-
-          ? editingPayment.id
-
-          : crypto.randomUUID(),
-
-
-      payerId,
-
-
-      payerName:
-        payerMember.name,
-
-
-      amount:
-        paymentAmount,
-
-
-      description:
-        paymentDescription,
-
-
-      // 支払い全体で選択された
-      // ステータスも保存
-      appliedStatusIds,
-
-
-      participants,
-
-
-      createdAt:
-
-        editingPayment
-
-          ? editingPayment.createdAt
-
-          : new Date().toISOString(),
-
-
-      updatedAt:
-        new Date().toISOString()
-
-    };
-
-
-    try {
-
-      const eventRef =
-        doc(
-          db,
-          "events",
-          eventId
-        );
-
-
-      // ==================================
-      // 編集
-      // ==================================
-
-      if (editingPayment) {
-
-        const updatedPayments =
-          payments.map(
-            item =>
-
-              item.id ===
-              editingPayment.id
-
-                ? payment
-
-                : item
-          );
-
-
-        await updateDoc(
-
-          eventRef,
-
-          {
-
-            payments:
-              updatedPayments
-
-          }
-
-        );
-
-      }
-
-
-      // ==================================
-      // 新規追加
-      // ==================================
-
-      else {
-
-        await updateDoc(
-
-          eventRef,
-
-          {
-
-            payments:
-              arrayUnion(
-                payment
-              )
-
-          }
-
-        );
-
-      }
-
-
-      window.location.href =
-        `event.html?id=${eventId}`;
-
-    }
-
-    catch (error) {
-
-      console.error(error);
-
-
-      alert(
-        editingPayment
-
-          ? "支払いの更新に失敗しました"
-
-          : "支払いの保存に失敗しました"
-      );
-
-    }
-
-  }
-);
-
-
-// ========================================
-// 初期化
-// ========================================
-
-loadEvent();
+});

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>支払いを追加 | 清算くん</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <a id="backLink" class="back-link">← イベントに戻る</a>
+    <h1 id="pageTitle">支払いを追加</h1>
+    <p>グループ全体の支払いを登録します</p>
+    <p class="required-legend"><span class="required-mark">*</span> は必須項目です</p>
+  </header>
+  <main class="container">
+    <div class="card">
+      <h2>支払い情報</h2>
+      <div class="receipt-scan-row">
+        <input type="file" id="receiptInput" accept="image/*" capture="environment" hidden>
+        <button type="button" id="scanReceiptButton" class="secondary-button">レシートを読み取る</button>
+        <p id="receiptScanStatus" class="hint" hidden></p>
+      </div>
+      <label>内容<input type="text" id="description" placeholder="例：会場代"></label>
+      <label>金額 <span class="required-mark">*</span><input type="number" id="amount" placeholder="例：30000" min="1"></label>
+      <p class="hint">※金額は対象のグループの人数と負担割合に応じて自動的に配分されます</p>
+    </div>
+    <div class="card">
+      <h2>対象のグループ <span class="required-mark">*</span></h2>
+      <p class="field-hint">デフォルトではすべてのグループが対象です。特定のグループのみに絞る場合はチェックを外してください。</p>
+      <div id="targetGroupOptions" class="checkbox-group"></div>
+    </div>
+    <section class="add-payment-section">
+      <button id="addPaymentButton" class="primary-button">支払いを追加</button>
+    </section>
+  </main>
+  <script type="module" src="grouppayment.js"></script>
+</body>
+</html>

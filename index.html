@@ -1,432 +1,84 @@
 <!DOCTYPE html>
 <html lang="ja">
-
 <head>
-
   <meta charset="UTF-8">
-
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  >
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>清算くん</title>
-
-  <link
-    rel="stylesheet"
-    href="style.css"
-  >
-
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
 </head>
-
-
 <body>
-
   <div class="container">
-
-
-    <!-- =====================
-         ヘッダー
-    ====================== -->
-
     <header>
-
-      <h1>
-        清算くん
-      </h1>
-
-      <p class="subtitle">
-        高機能割り勘アプリ
-      </p>
-
+      <h1>清算くん</h1>
+      <p class="subtitle">高機能割り勘アプリ</p>
+      <p class="required-legend"><span class="required-mark">*</span> は必須項目です</p>
     </header>
-
-
-    <!-- =====================
-         イベント設定
-    ====================== -->
-
     <section class="card">
-
-      <h2>
-        イベント設定
-      </h2>
-
-      <p class="required-note">
-        <span class="required-mark">*</span> は必須項目です
-      </p>
-
-      <input
-        type="text"
-        id="eventName"
-        class="required-input"
-        placeholder="* イベント名を入力"
-      >
-
+      <h2>イベント設定</h2>
+      <label>イベント名 <span class="required-mark">*</span><input type="text" id="eventName" placeholder="イベント名を入力"></label>
     </section>
-
-
-    <!-- =====================
-         モード切り替え
-    ====================== -->
-
     <div class="mode-switch">
-
-      <button
-        id="individualModeButton"
-        class="mode-button active"
-      >
-        個人モード
-      </button>
-
-
-      <button
-        id="groupModeButton"
-        class="mode-button"
-      >
-        団体モード
-      </button>
-
+      <button id="individualModeButton" class="mode-button active">個人モード</button>
+      <button id="groupModeButton" class="mode-button">団体モード</button>
     </div>
-
-
-    <!-- =====================
-         個人モード
-    ====================== -->
-
     <div id="individualMode">
-
-
-      <!-- ステータス -->
-
       <section class="card">
-
-        <h2>
-          ステータス・割引設定
-        </h2>
-
-
-        <p class="section-description">
-
-          特定の参加者の負担額を調整できます。
-
-          <br>
-
-          例：
-          「運転手」を20%引きにすると、
-          通常の参加者より負担額が軽くなります。
-
-          <br><br>
-
-          複数のステータスを持つ場合、
-          割引率は合計して計算されます。
-
-          <br>
-
-          ※マイナスの数値を入力すると増額になります。
-
-        </p>
-
-
+        <h2>ステータス・割引設定<span class="optional-tag">（任意）</span></h2>
+        <p class="section-description">特定の参加者の負担額を調整できます。<br>例：「運転手」を20%引きにすると、通常の参加者より負担額が軽くなります。<br><br>複数のステータスを持つ場合、割引率は合計して計算されます。<br>※マイナスの数値を入力すると増額になります。</p>
+        <p class="field-hint">追加するにはステータス名 <span class="required-mark">*</span>、割引率 <span class="required-mark">*</span> の入力が必要です</p>
         <div class="input-row">
-
-          <input
-            type="text"
-            id="newStatusName"
-            class="required-input"
-            placeholder="* ステータス名（例：運転手）"
-          >
-
-
+          <input type="text" id="newStatusName" placeholder="例：運転手">
           <div class="discount-input-wrapper">
-
-            <input
-              type="number"
-              id="newStatusDiscount"
-              placeholder="割引率（%）"
-              min="-100"
-              max="100"
-            >
-
-            <span>
-              %
-            </span>
-
+            <input type="number" id="newStatusDiscount" placeholder="割引率" min="-100" max="100">
+            <span>%</span>
           </div>
-
-
-          <button id="addStatusButton">
-            追加
-          </button>
-
+          <button id="addStatusButton">追加</button>
         </div>
-
-
         <div id="statusList"></div>
-
       </section>
-
-
-      <!-- 参加者 -->
-
       <section class="card">
-
-        <h2>
-          参加者
-        </h2>
-
-
-        <input
-          type="text"
-          id="memberName"
-          class="required-input"
-          placeholder="* 名前"
-        >
-
-
-        <div
-          id="memberStatusOptions"
-          class="checkbox-container"
-        ></div>
-
-
-        <button id="addMemberButton">
-          参加者を追加
-        </button>
-
-
+        <h2>参加者</h2>
+        <p class="field-hint">名前 <span class="required-mark">*</span> の入力が必要です</p>
+        <div class="input-row input-row-compact">
+          <input type="text" id="memberName" placeholder="名前">
+          <button id="addMemberButton">追加</button>
+        </div>
+        <div id="memberStatusOptions" class="checkbox-container"></div>
         <div id="memberList"></div>
-
       </section>
-
-
     </div>
-
-
-    <!-- =====================
-         団体モード
-    ====================== -->
-
-    <div
-      id="groupMode"
-      style="display:none"
-    >
-
-
+    <div id="groupMode" style="display:none">
       <section class="card">
-
-        <h2>
-          参加グループ
-        </h2>
-
-
-        <p class="section-description">
-
-          参加グループごとの人数と負担割合を設定できます。
-
-          <br>
-
-          負担割合は「100% − 割引率」です（例：割引率20% → 負担割合80%）。
-
-          <br>
-
-          負担割合が低いグループほど、
-          1人あたりの負担が軽くなります。未入力の場合は100%（通常）です。
-
-          <br>
-
-          <span class="required-note"><span class="required-mark">*</span> は必須項目です</span>
-
-        </p>
-
-
-        <div class="back-calc-box">
-
-          <p class="back-calc-title">
-            実際の金額から負担割合を逆算（任意）
-          </p>
-
-          <p class="section-description">
-
-            「基準額」に負担割合100%の人の1人あたり金額を入れ、
-            各グループの「実額」に実際に払う1人あたり金額を入れると、
-            負担割合が自動で計算されます。
-
-            <br>
-
-            例：基準額5,000円・実額3,000円 → 負担割合60%
-
-          </p>
-
-          <div class="discount-input-wrapper">
-
-            <input
-              type="number"
-              id="groupBasePrice"
-              placeholder="基準額（100%の1人あたり金額）"
-              min="1"
-              step="any"
-            >
-
-            <span>
-              円
-            </span>
-
-          </div>
-
-        </div>
-
-
+        <h2>参加グループ</h2>
+        <p class="section-description">グループごとの人数と負担割合を設定できます。<br>負担割合は100%が基準（頭数どおりの通常負担）です。100%より低いと1人あたりの負担が軽くなり、高いと重くなります。</p>
+        <p class="field-hint">グループ名 <span class="required-mark">*</span>、人数 <span class="required-mark">*</span>、負担割合 <span class="required-mark">*</span></p>
         <div class="input-row">
-
-          <input
-            type="text"
-            id="groupName"
-            class="required-input"
-            placeholder="* グループ名（例：1期）"
-          >
-
-
-          <input
-            type="number"
-            id="groupPeople"
-            class="required-input"
-            placeholder="* 人数"
-          >
-
-
+          <input type="text" id="groupName" placeholder="例：1期">
+          <input type="number" id="groupPeople" placeholder="人数">
           <div class="discount-input-wrapper">
-
-            <input
-              type="number"
-              id="groupBurden"
-              placeholder="負担割合（既定100）"
-              min="0"
-              max="200"
-              step="any"
-            >
-
-            <span>
-              %
-            </span>
-
+            <input type="number" id="groupBurdenRate" placeholder="負担割合" value="100" min="0" max="1000">
+            <span>%</span>
           </div>
-
-
-          <div class="discount-input-wrapper">
-
-            <input
-              type="number"
-              id="groupActualPrice"
-              placeholder="実額（任意）"
-              min="0"
-              step="any"
-            >
-
-            <span>
-              円
-            </span>
-
-          </div>
-
-
-          <button id="addGroupButton">
-            追加
-          </button>
-
+          <button id="addGroupButton">追加</button>
         </div>
-
-
         <div id="groupList"></div>
-
       </section>
-
-
-      <!-- 最初の支払い -->
-
-      <section
-        id="groupFirstPaymentSection"
-        class="card"
-      >
-
-        <h2>
-          最初の支払い
-        </h2>
-
-
-        <p class="section-description">
-
-          グループの作成と同時に、最初の支払いを登録できます。
-
-          <br>
-
-          内容はイベント名（「<span id="groupFirstPaymentEventNamePreview">イベント名</span>」）が自動的に使われます。
-
-          <br>
-
-          空欄のままでもグループは作成できます。
-
-        </p>
-
-
+      <section id="groupFirstPaymentSection" class="card">
+        <h2>最初の支払い</h2>
+        <p class="section-description">グループの作成と同時に、最初の支払いを登録できます。<br>内容はイベント名（「<span id="groupFirstPaymentEventNamePreview">イベント名</span>」）が自動的に使われます。<br>空欄のままでもグループは作成できます。</p>
         <div class="input-row">
-
-          <input
-            type="number"
-            id="groupFirstPaymentAmount"
-            placeholder="金額（例：30000）"
-            min="1"
-          >
-
-
-          <input
-            type="text"
-            id="groupFirstPaymentPayerName"
-            placeholder="建て替えた人（例：山田）"
-          >
-
+          <input type="number" id="groupFirstPaymentAmount" placeholder="金額（例：30000）" min="1">
         </div>
-
       </section>
-
-
     </div>
-
-
-    <!-- =====================
-         作成 / 保存
-    ====================== -->
-
     <section class="create-section">
-
-      <button
-        id="createEventButton"
-        class="primary-button"
-      >
-        グループを作成
-      </button>
-
-
-      <button
-        id="backToEventButton"
-        class="secondary-button"
-        style="display:none"
-      >
-        戻る
-      </button>
-
+      <button id="createEventButton" class="primary-button">グループを作成</button>
+      <button id="backToEventButton" class="secondary-button" style="display:none">戻る</button>
     </section>
-
-
   </div>
-
-
-  <script
-    type="module"
-    src="home.js"
-  ></script>
-
-
+  <script type="module" src="home.js"></script>
 </body>
-
 </html>

@@ -1,2411 +1,468 @@
-// ========================================
-// 清算くん
-// ホーム / イベント編集
-// ========================================
-
-
-// ========================================
-// Firebase
-// ========================================
-
-import { initializeApp } from
-  "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-
-import {
-  getFirestore,
-  doc,
-  setDoc,
-  getDoc
-} from
-  "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
-
-
-// ========================================
-// Firebase設定
-// ========================================
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
+import { getFirestore, doc, setDoc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
 const firebaseConfig = {
-
-  apiKey:
-    "AIzaSyBKbP74L4MwAOhwFXFNZbd1DFFv9M68Awo",
-
-  authDomain:
-    "k-sha-kun.firebaseapp.com",
-
-  projectId:
-    "k-sha-kun",
-
-  storageBucket:
-    "k-sha-kun.firebasestorage.app",
-
-  messagingSenderId:
-    "573497625446",
-
-  appId:
-    "1:573497625446:web:e056913eecdb00cac7d6a7"
-
+  apiKey: "AIzaSyBKbP74L4MwAOhwFXFNZbd1DFFv9M68Awo",
+  authDomain: "k-sha-kun.firebaseapp.com",
+  projectId: "k-sha-kun",
+  storageBucket: "k-sha-kun.firebasestorage.app",
+  messagingSenderId: "573497625446",
+  appId: "1:573497625446:web:e056913eecdb00cac7d6a7"
 };
 
-
-// ========================================
-// Firebase初期化
-// ========================================
-
-const app =
-  initializeApp(firebaseConfig);
-
-const db =
-  getFirestore(app);
-
-
-// ========================================
-// URL
-// ========================================
-
-const params =
-  new URLSearchParams(
-    window.location.search
-  );
-
-
-const eventId =
-  params.get("id");
-
-
-// ========================================
-// データ
-// ========================================
-
-let currentMode =
-  "individual";
-
-let statuses = [];
-
-let members = [];
-
-let groups = [];
-
-let payments = [];
-
-let groupPayments = [];
-
-
-// ========================================
-// HTML要素
-// ========================================
-
-const eventName =
-  document.getElementById(
-    "eventName"
-  );
-
-
-// モード
-
-const individualModeButton =
-  document.getElementById(
-    "individualModeButton"
-  );
-
-const groupModeButton =
-  document.getElementById(
-    "groupModeButton"
-  );
-
-const individualMode =
-  document.getElementById(
-    "individualMode"
-  );
-
-const groupMode =
-  document.getElementById(
-    "groupMode"
-  );
-
-
-// ステータス
-
-const newStatusName =
-  document.getElementById(
-    "newStatusName"
-  );
-
-const newStatusDiscount =
-  document.getElementById(
-    "newStatusDiscount"
-  );
-
-const addStatusButton =
-  document.getElementById(
-    "addStatusButton"
-  );
-
-const statusList =
-  document.getElementById(
-    "statusList"
-  );
-
-
-// 参加者
-
-const memberName =
-  document.getElementById(
-    "memberName"
-  );
-
-const memberStatusOptions =
-  document.getElementById(
-    "memberStatusOptions"
-  );
-
-const addMemberButton =
-  document.getElementById(
-    "addMemberButton"
-  );
-
-const memberList =
-  document.getElementById(
-    "memberList"
-  );
-
-
-// 団体
-
-const groupName =
-  document.getElementById(
-    "groupName"
-  );
-
-const groupPeople =
-  document.getElementById(
-    "groupPeople"
-  );
-
-const groupBurden =
-  document.getElementById(
-    "groupBurden"
-  );
-
-const groupBasePrice =
-  document.getElementById(
-    "groupBasePrice"
-  );
-
-const groupActualPrice =
-  document.getElementById(
-    "groupActualPrice"
-  );
-
-const addGroupButton =
-  document.getElementById(
-    "addGroupButton"
-  );
-
-const groupList =
-  document.getElementById(
-    "groupList"
-  );
-
-
-// 最初の支払い
-
-const groupFirstPaymentSection =
-  document.getElementById(
-    "groupFirstPaymentSection"
-  );
-
-const groupFirstPaymentEventNamePreview =
-  document.getElementById(
-    "groupFirstPaymentEventNamePreview"
-  );
-
-const groupFirstPaymentAmount =
-  document.getElementById(
-    "groupFirstPaymentAmount"
-  );
-
-const groupFirstPaymentPayerName =
-  document.getElementById(
-    "groupFirstPaymentPayerName"
-  );
-
-
-// ボタン
-
-const createEventButton =
-  document.getElementById(
-    "createEventButton"
-  );
-
-const backToEventButton =
-  document.getElementById(
-    "backToEventButton"
-  );
-
-
-// ========================================
-// ID生成
-// ========================================
-
-function createId() {
-
-  return (
-
-    Date.now().toString() +
-
-    Math.random()
-      .toString(16)
-      .slice(2)
-
-  );
-
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const params = new URLSearchParams(window.location.search);
+const eventId = params.get("id");
+
+let currentMode = "individual", statuses = [], members = [], groups = [], payments = [], groupPayments = [];
+let editingStatusId = null, editingMemberId = null, editingGroupId = null;
+
+const eventName = document.getElementById("eventName");
+const individualModeButton = document.getElementById("individualModeButton");
+const groupModeButton = document.getElementById("groupModeButton");
+const individualMode = document.getElementById("individualMode");
+const groupMode = document.getElementById("groupMode");
+
+const newStatusName = document.getElementById("newStatusName");
+const newStatusDiscount = document.getElementById("newStatusDiscount");
+const addStatusButton = document.getElementById("addStatusButton");
+const statusList = document.getElementById("statusList");
+
+const memberName = document.getElementById("memberName");
+const memberStatusOptions = document.getElementById("memberStatusOptions");
+const addMemberButton = document.getElementById("addMemberButton");
+const memberList = document.getElementById("memberList");
+
+const groupName = document.getElementById("groupName");
+const groupPeople = document.getElementById("groupPeople");
+const groupBurdenRate = document.getElementById("groupBurdenRate");
+const addGroupButton = document.getElementById("addGroupButton");
+const groupList = document.getElementById("groupList");
+
+const groupFirstPaymentSection = document.getElementById("groupFirstPaymentSection");
+const groupFirstPaymentEventNamePreview = document.getElementById("groupFirstPaymentEventNamePreview");
+const groupFirstPaymentAmount = document.getElementById("groupFirstPaymentAmount");
+const createEventButton = document.getElementById("createEventButton");
+const backToEventButton = document.getElementById("backToEventButton");
+
+function createId() { return Date.now().toString() + Math.random().toString(16).slice(2); }
+
+// イベントIDはURLに直接載るため、共有しやすいよう英数字8文字の短いIDにする
+// （62^8 ≈ 2180億通りあり、日常的な利用件数では衝突はまず起こらない）
+const SHORT_ID_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"; // 62文字
+const SHORT_ID_LENGTH = 8;
+function createShortEventId() {
+  const chars = [];
+  while (chars.length < SHORT_ID_LENGTH) {
+    const bytes = new Uint8Array(SHORT_ID_LENGTH * 2);
+    if (window.crypto?.getRandomValues) window.crypto.getRandomValues(bytes);
+    else for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+    for (const b of bytes) {
+      if (chars.length >= SHORT_ID_LENGTH) break;
+      // 256は62で割り切れないため、余りが出る範囲（248以上）のバイトは捨てて選び直し、文字の偏りをなくす
+      if (b < 248) chars.push(SHORT_ID_CHARS[b % 62]);
+    }
+  }
+  return chars.join("");
 }
-
-
-// ========================================
-// 割引表示
-// ========================================
-
+// ごく低い確率で既存イベントとIDが重複した場合に備え、重複しないIDになるまで生成し直す
+async function generateUniqueEventId() {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const candidate = createShortEventId();
+    const snapshot = await getDoc(doc(db, "events", candidate));
+    if (!snapshot.exists()) return candidate;
+  }
+  throw new Error("イベントIDの生成に失敗しました。もう一度お試しください");
+}
 function formatDiscount(discount) {
-
-  discount =
-    Number(discount);
-
-
-  if (discount > 0) {
-
-    return `${discount}%引き`;
-
-  }
-
-
-  if (discount < 0) {
-
-    return `${Math.abs(discount)}%増し`;
-
-  }
-
-
+  discount = Number(discount);
+  if (discount > 0) return `${discount}%引き`;
+  if (discount < 0) return `${Math.abs(discount)}%増し`;
   return "通常";
-
 }
-
-
-// ========================================
-// 負担割合（参加グループ用）
-// 負担割合(%) = 100 − 割引率(%)
-// 例）割引率20% → 負担割合80%
-// ========================================
-
-const BURDEN_MIN = 0;
-
-const BURDEN_MAX = 200;
-
-
-function getGroupBurden(group) {
-
-  if (
-    group.burden !== undefined &&
-    group.burden !== null &&
-    group.burden !== ""
-  ) {
-
-    return Number(group.burden);
-
-  }
-
-  // 旧データ（discount保存）との互換
-  return 100 - Number(group.discount || 0);
-
+// 団体の負担割合：100%が基準（通常の頭数どおりの負担）。
+// 既存データにdiscount（割引率）しかない場合は自動的に負担割合へ変換する。
+function getGroupBurdenRate(g) {
+  if (g.burdenRate !== undefined && g.burdenRate !== null && g.burdenRate !== "") return Number(g.burdenRate);
+  return 100 - Number(g.discount || 0);
 }
-
-
-function formatBurden(burden) {
-
-  return `負担割合 ${Math.round(Number(burden) * 100) / 100}%`;
-
+function formatBurdenRate(rate) {
+  rate = Number(rate);
+  return rate === 100 ? "負担割合100%（基準）" : `負担割合${rate}%`;
 }
-
-
-// 実額から負担割合を逆算（小数第2位まで）
-// 負担割合(%) = 実額 ÷ 基準額 × 100
-function calcBurdenFromPrice(actualPrice, basePrice) {
-
-  const actual =
-    Number(actualPrice);
-
-  const base =
-    Number(basePrice);
-
-  if (
-    !base ||
-    base <= 0 ||
-    isNaN(actual) ||
-    actual < 0
-  ) {
-
-    return null;
-
-  }
-
-  return Math.round(
-    (actual / base) * 100 * 100
-  ) / 100;
-
-}
-
-
-function updateBurdenFromActual() {
-
-  if (groupActualPrice.value === "") {
-
-    return;
-
-  }
-
-  const burden =
-    calcBurdenFromPrice(
-      groupActualPrice.value,
-      groupBasePrice.value
-    );
-
-  if (burden === null) {
-
-    return;
-
-  }
-
-  groupBurden.value =
-    burden;
-
-}
-
-
-function createBurdenField(value = 100) {
-
-  const field =
-    document.createElement(
-      "div"
-    );
-
-  field.className =
-    "discount-field";
-
-  const label =
-    document.createElement(
-      "span"
-    );
-
-  label.textContent =
-    "負担割合";
-
-  const input =
-    document.createElement(
-      "input"
-    );
-
-  input.type =
-    "number";
-
-  input.value =
-    value;
-
-  input.min =
-    BURDEN_MIN;
-
-  input.max =
-    BURDEN_MAX;
-
-  const percent =
-    document.createElement(
-      "span"
-    );
-
-  percent.textContent =
-    "%";
-
-  field.appendChild(label);
-
-  field.appendChild(input);
-
-  field.appendChild(percent);
-
-  return { field, input };
-
-}
-
-
-// ========================================
-// 割引率入力作成
-// ========================================
-
-function createDiscountField(value = 0) {
-
-  const field =
-    document.createElement(
-      "div"
-    );
-
-
-  field.className =
-    "discount-field";
-
-
-  const label =
-    document.createElement(
-      "span"
-    );
-
-
-  label.textContent =
-    "割引率";
-
-
-  const input =
-    document.createElement(
-      "input"
-    );
-
-
-  input.type =
-    "number";
-
-
-  input.value =
-    value;
-
-
-  input.min =
-    -100;
-
-
-  input.max =
-    100;
-
-
-  const percent =
-    document.createElement(
-      "span"
-    );
-
-
-  percent.textContent =
-    "%";
-
-
-  field.appendChild(
-    label
-  );
-
-
-  field.appendChild(
-    input
-  );
-
-
-  field.appendChild(
-    percent
-  );
-
-
-  return {
-
-    field,
-
-    input
-
-  };
-
-}
-
-
-// ========================================
-// 最初の支払い：イベント名プレビュー
-// ========================================
 
 function updateGroupFirstPaymentPreview() {
-
-  if (!groupFirstPaymentEventNamePreview) {
-
-    return;
-
+  if (groupFirstPaymentEventNamePreview) {
+    groupFirstPaymentEventNamePreview.textContent = eventName.value.trim() || "イベント名";
   }
-
-
-  groupFirstPaymentEventNamePreview.textContent =
-    eventName.value.trim() ||
-    "イベント名";
-
 }
-
-
-eventName.addEventListener(
-  "input",
-  updateGroupFirstPaymentPreview
-);
-
-
+eventName.addEventListener("input", updateGroupFirstPaymentPreview);
 updateGroupFirstPaymentPreview();
 
+individualModeButton.addEventListener("click", () => {
+  currentMode = "individual";
+  individualMode.style.display = "block";
+  groupMode.style.display = "none";
+  individualModeButton.classList.add("active");
+  groupModeButton.classList.remove("active");
+});
 
-// ========================================
-// モード切り替え
-// ========================================
+groupModeButton.addEventListener("click", () => {
+  currentMode = "group";
+  individualMode.style.display = "none";
+  groupMode.style.display = "block";
+  groupModeButton.classList.add("active");
+  individualModeButton.classList.remove("active");
+});
 
-individualModeButton.addEventListener(
-  "click",
-  () => {
-
-    currentMode =
-      "individual";
-
-
-    individualMode.style.display =
-      "block";
-
-    groupMode.style.display =
-      "none";
-
-
-    individualModeButton.classList.add(
-      "active"
-    );
-
-    groupModeButton.classList.remove(
-      "active"
-    );
-
-  }
-);
-
-
-groupModeButton.addEventListener(
-  "click",
-  () => {
-
-    currentMode =
-      "group";
-
-
-    individualMode.style.display =
-      "none";
-
-    groupMode.style.display =
-      "block";
-
-
-    groupModeButton.classList.add(
-      "active"
-    );
-
-    individualModeButton.classList.remove(
-      "active"
-    );
-
-  }
-);
-
-
-// ========================================
-// ステータス追加
-// ========================================
-
-addStatusButton.addEventListener(
-  "click",
-  () => {
-
-    const name =
-      newStatusName.value.trim();
-
-
-    const discount =
-      Number(
-        newStatusDiscount.value
-      );
-
-
-    if (!name) {
-
-      alert(
-        "ステータス名を入力してください"
-      );
-
-      return;
-
-    }
-
-
-    if (
-
-      newStatusDiscount.value === "" ||
-
-      isNaN(discount) ||
-
-      discount < -100 ||
-
-      discount > 100
-
-    ) {
-
-      alert(
-        "割引率は-100〜100で入力してください"
-      );
-
-      return;
-
-    }
-
-
-    statuses.push({
-
-      id:
-        createId(),
-
-      name,
-
-      discount
-
-    });
-
-
-    newStatusName.value =
-      "";
-
-    newStatusDiscount.value =
-      "";
-
-
-    renderIndividual();
-
-  }
-);
-
-
-// ========================================
-// ステータス一覧
-// ========================================
+addStatusButton.addEventListener("click", () => {
+  const name = newStatusName.value.trim();
+  const discount = Number(newStatusDiscount.value);
+  if (!name) return alert("ステータス名を入力してください");
+  if (newStatusDiscount.value === "" || isNaN(discount) || discount < -100 || discount > 100) return alert("割引率は-100〜100で入力してください");
+  statuses.push({ id: createId(), name, discount });
+  newStatusName.value = ""; newStatusDiscount.value = "";
+  renderIndividual();
+});
 
 function renderStatusList() {
+  statusList.innerHTML = "";
+  if (!statuses.length) { statusList.innerHTML = `<p class="empty">ステータスはまだありません</p>`; return; }
 
-  statusList.innerHTML =
-    "";
+  statuses.forEach(s => {
+    const row = document.createElement("div");
 
-
-  if (
-    statuses.length === 0
-  ) {
-
-    statusList.innerHTML =
-      `
-      <p class="empty">
-        ステータスはまだありません
-      </p>
-      `;
-
-    return;
-
-  }
-
-
-  statuses.forEach(
-    status => {
-
-      const item =
-        document.createElement(
-          "div"
-        );
-
-
-      item.className =
-        "list-item";
-
-
-      item.innerHTML = `
-
-        <div>
-
-          <strong>
-            ${status.name}
-          </strong>
-
-          <span>
-            ${formatDiscount(
-              status.discount
-            )}
-          </span>
-
+    if (editingStatusId === s.id) {
+      row.className = "list-item is-editing";
+      row.innerHTML = `
+        <p class="field-hint">ステータス名・割引率<span class="required-mark">*</span>（すべて必須）</p>
+        <div class="edit-inputs edit-fields-row">
+          <input type="text" class="edit-status-name" value="${s.name}" placeholder="ステータス名">
+          <div class="discount-input-wrapper">
+            <input type="number" class="edit-status-discount" value="${s.discount}" min="-100" max="100">
+            <span>%</span>
+          </div>
         </div>
-
-      `;
-
-
-      const actions =
-        document.createElement(
-          "div"
-        );
-
-
-      actions.className =
-        "item-actions";
-
-
-      const editButton =
-        document.createElement(
-          "button"
-        );
-
-
-      editButton.textContent =
-        "編集";
-
-
-      const deleteButton =
-        document.createElement(
-          "button"
-        );
-
-
-      deleteButton.textContent =
-        "削除";
-
-
-      actions.appendChild(
-        editButton
-      );
-
-      actions.appendChild(
-        deleteButton
-      );
-
-
-      item.appendChild(
-        actions
-      );
-
-
-      // 編集
-
-      editButton.addEventListener(
-        "click",
-        () => {
-
-          item.innerHTML =
-            "";
-
-
-          item.classList.add(
-            "is-editing"
-          );
-
-
-          const nameInput =
-            document.createElement(
-              "input"
-            );
-
-
-          nameInput.value =
-            status.name;
-
-
-          const discountField =
-            createDiscountField(
-              status.discount
-            );
-
-
-          const editInputs =
-            document.createElement(
-              "div"
-            );
-
-
-          editInputs.className =
-            "edit-inputs";
-
-
-          editInputs.appendChild(
-            nameInput
-          );
-
-          editInputs.appendChild(
-            discountField.field
-          );
-
-
-          const saveButton =
-            document.createElement(
-              "button"
-            );
-
-
-          saveButton.textContent =
-            "保存";
-
-
-          const cancelButton =
-            document.createElement(
-              "button"
-            );
-
-
-          cancelButton.textContent =
-            "キャンセル";
-
-
-          const editActions =
-            document.createElement(
-              "div"
-            );
-
-
-          editActions.className =
-            "edit-actions";
-
-
-          editActions.appendChild(
-            saveButton
-          );
-
-          editActions.appendChild(
-            cancelButton
-          );
-
-
-          item.appendChild(
-            editInputs
-          );
-
-
-          item.appendChild(
-            editActions
-          );
-
-
-          saveButton.addEventListener(
-            "click",
-            () => {
-
-              const newName =
-                nameInput.value.trim();
-
-
-              const newDiscount =
-                Number(
-                  discountField.input.value
-                );
-
-
-              if (!newName) {
-
-                alert(
-                  "名前を入力してください"
-                );
-
-                return;
-
-              }
-
-
-              if (
-
-                discountField.input.value === "" ||
-
-                isNaN(newDiscount) ||
-
-                newDiscount < -100 ||
-
-                newDiscount > 100
-
-              ) {
-
-                alert(
-                  "割引率は-100〜100です"
-                );
-
-                return;
-
-              }
-
-
-              status.name =
-                newName;
-
-
-              status.discount =
-                newDiscount;
-
-
-              renderIndividual();
-
-            }
-          );
-
-
-          cancelButton.addEventListener(
-            "click",
-            () => {
-
-              renderIndividual();
-
-            }
-          );
-
-        }
-      );
-
-
-      // 削除
-
-      deleteButton.addEventListener(
-        "click",
-        () => {
-
-          statuses =
-            statuses.filter(
-              item =>
-                item.id !== status.id
-            );
-
-
-          members.forEach(
-            member => {
-
-              member.statuses =
-                member.statuses.filter(
-                  id =>
-                    id !== status.id
-                );
-
-            }
-          );
-
-
-          renderIndividual();
-
-        }
-      );
-
-
-      statusList.appendChild(
-        item
-      );
-
+        <div class="edit-actions">
+          <button type="button" class="secondary-button status-cancel-btn">キャンセル</button>
+          <button type="button" class="status-save-btn">保存</button>
+        </div>`;
+      statusList.appendChild(row);
+
+      row.querySelector(".status-cancel-btn").addEventListener("click", () => {
+        editingStatusId = null;
+        renderStatusList();
+      });
+      row.querySelector(".status-save-btn").addEventListener("click", () => {
+        const name = row.querySelector(".edit-status-name").value.trim();
+        const discount = Number(row.querySelector(".edit-status-discount").value);
+        if (!name) return alert("ステータス名を入力してください");
+        if (isNaN(discount) || discount < -100 || discount > 100) return alert("割引率は-100〜100で入力してください");
+        const target = statuses.find(st => st.id === s.id);
+        target.name = name; target.discount = discount;
+        editingStatusId = null;
+        renderIndividual();
+      });
+    } else {
+      row.className = "list-item";
+      row.innerHTML = `
+        <div>
+          <strong>${s.name}</strong>
+          <span>${formatDiscount(s.discount)}</span>
+        </div>
+        <div class="item-actions">
+          <button type="button" class="edit-button status-edit-btn" data-id="${s.id}">編集</button>
+          <button type="button" class="secondary-button status-delete-btn" data-id="${s.id}">削除</button>
+        </div>`;
+      statusList.appendChild(row);
     }
-  );
+  });
 
+  statusList.querySelectorAll(".status-edit-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      editingStatusId = btn.dataset.id;
+      renderStatusList();
+    });
+  });
+  statusList.querySelectorAll(".status-delete-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.id;
+      if (!confirm("このステータスを削除してもよろしいですか？（参加者に設定されている場合は解除されます）")) return;
+      statuses = statuses.filter(s => s.id !== id);
+      members.forEach(m => { if (m.statuses) m.statuses = m.statuses.filter(sid => sid !== id); });
+      if (editingStatusId === id) editingStatusId = null;
+      renderIndividual();
+    });
+  });
 }
-
-
-// ========================================
-// ステータス選択肢
-// ========================================
 
 function renderMemberStatusOptions() {
-
-  memberStatusOptions.innerHTML =
-    "";
-
-
-  if (
-    statuses.length === 0
-  ) {
-
-    memberStatusOptions.innerHTML =
-      `
-      <p class="hint">
-        ステータスを追加すると、
-        参加者ごとに割引条件を設定できます
-      </p>
-      `;
-
-    return;
-
-  }
-
-
-  statuses.forEach(
-    status => {
-
-      const label =
-        document.createElement(
-          "label"
-        );
-
-
-      label.className =
-        "checkbox-label";
-
-
-      const checkbox =
-        document.createElement(
-          "input"
-        );
-
-
-      checkbox.type =
-        "checkbox";
-
-      checkbox.value =
-        status.id;
-
-
-      const text =
-        document.createElement(
-          "span"
-        );
-
-
-      text.textContent =
-        `${status.name}（${formatDiscount(
-          status.discount
-        )}）`;
-
-
-      label.appendChild(
-        checkbox
-      );
-
-      label.appendChild(
-        text
-      );
-
-
-      memberStatusOptions.appendChild(
-        label
-      );
-
-    }
-  );
-
+  memberStatusOptions.innerHTML = "";
+  statuses.forEach(s => {
+    const label = document.createElement("label");
+    label.className = "checkbox-label";
+    label.innerHTML = `<input type="checkbox" value="${s.id}"><span>${s.name}（${formatDiscount(s.discount)}）</span>`;
+    memberStatusOptions.appendChild(label);
+  });
 }
-
-
-// ========================================
-// 参加者追加
-// ========================================
-
-addMemberButton.addEventListener(
-  "click",
-  () => {
-
-    const name =
-      memberName.value.trim();
-
-
-    if (!name) {
-
-      alert(
-        "名前を入力してください"
-      );
-
-      return;
-
-    }
-
-
-    const selectedStatuses =
-      Array.from(
-
-        memberStatusOptions.querySelectorAll(
-          "input:checked"
-        )
-
-      ).map(
-        checkbox =>
-          checkbox.value
-      );
-
-
-    members.push({
-
-      id:
-        createId(),
-
-      name,
-
-      statuses:
-        selectedStatuses
-
-    });
-
-
-    memberName.value =
-      "";
-
-
-    renderIndividual();
-
-  }
-);
-
-
-// ========================================
-// 参加者一覧
-// ========================================
 
 function renderMemberList() {
+  memberList.innerHTML = "";
+  if (!members.length) { memberList.innerHTML = `<p class="empty">参加者はまだいません</p>`; return; }
 
-  memberList.innerHTML =
-    "";
+  members.forEach(m => {
+    const row = document.createElement("div");
 
-
-  if (
-    members.length === 0
-  ) {
-
-    memberList.innerHTML =
-      `
-      <p class="empty">
-        参加者はまだいません
-      </p>
-      `;
-
-    return;
-
-  }
-
-
-  members.forEach(
-    member => {
-
-      const item =
-        document.createElement(
-          "div"
-        );
-
-
-      item.className =
-        "list-item";
-
-
-      const memberStatuses =
-        member.statuses
-
-          .map(
-            id =>
-              statuses.find(
-                status =>
-                  status.id === id
-              )
-          )
-
-          .filter(Boolean);
-
-
-      const statusNames =
-        memberStatuses
-
-          .map(
-            status =>
-              status.name
-          )
-
-          .join("・");
-
-
-      const totalDiscount =
-        memberStatuses.reduce(
-
-          (sum, status) =>
-            sum +
-            Number(status.discount),
-
-          0
-
-        );
-
-
-      item.innerHTML = `
-
-        <div>
-
-          <strong>
-            ${member.name}
-          </strong>
-
-          <span>
-
-            ${
-              statusNames ||
-              "ステータスなし"
-            }
-
-            ${
-              memberStatuses.length > 0
-                ? `（合計：${formatDiscount(totalDiscount)}）`
-                : ""
-            }
-
-          </span>
-
+    if (editingMemberId === m.id) {
+      row.className = "list-item is-editing";
+      const statusCheckboxes = statuses.map(s => `
+        <label class="checkbox-label">
+          <input type="checkbox" value="${s.id}" ${m.statuses?.includes(s.id) ? "checked" : ""}>
+          <span>${s.name}（${formatDiscount(s.discount)}）</span>
+        </label>`).join("");
+      row.innerHTML = `
+        <p class="field-hint">名前 <span class="required-mark">*</span></p>
+        <div class="edit-inputs">
+          <input type="text" class="edit-member-name" value="${m.name}" placeholder="名前">
+          <div class="checkbox-container edit-member-statuses">${statusCheckboxes}</div>
         </div>
-
-      `;
-
-
-      const actions =
-        document.createElement(
-          "div"
-        );
-
-
-      actions.className =
-        "item-actions";
-
-
-      const editButton =
-        document.createElement(
-          "button"
-        );
-
-
-      editButton.textContent =
-        "編集";
-
-
-      const deleteButton =
-        document.createElement(
-          "button"
-        );
-
-
-      deleteButton.textContent =
-        "削除";
-
-
-      actions.appendChild(
-        editButton
-      );
-
-      actions.appendChild(
-        deleteButton
-      );
-
-
-      item.appendChild(
-        actions
-      );
-
-
-      // 編集
-
-      editButton.addEventListener(
-        "click",
-        () => {
-
-          item.innerHTML =
-            "";
-
-
-          item.classList.add(
-            "is-editing"
-          );
-
-
-          const editInputs =
-            document.createElement(
-              "div"
-            );
-
-
-          editInputs.className =
-            "edit-inputs";
-
-
-          const nameInput =
-            document.createElement(
-              "input"
-            );
-
-
-          nameInput.value =
-            member.name;
-
-
-          editInputs.appendChild(
-            nameInput
-          );
-
-
-          const statusOptions =
-            document.createElement(
-              "div"
-            );
-
-
-          statusOptions.className =
-            "checkbox-container";
-
-
-          statuses.forEach(
-            status => {
-
-              const label =
-                document.createElement(
-                  "label"
-                );
-
-
-              label.className =
-                "checkbox-label";
-
-
-              const checkbox =
-                document.createElement(
-                  "input"
-                );
-
-
-              checkbox.type =
-                "checkbox";
-
-              checkbox.value =
-                status.id;
-
-              checkbox.checked =
-                member.statuses.includes(
-                  status.id
-                );
-
-
-              const text =
-                document.createElement(
-                  "span"
-                );
-
-
-              text.textContent =
-                `${status.name}（${formatDiscount(
-                  status.discount
-                )}）`;
-
-
-              label.appendChild(
-                checkbox
-              );
-
-              label.appendChild(
-                text
-              );
-
-
-              statusOptions.appendChild(
-                label
-              );
-
-            }
-          );
-
-
-          editInputs.appendChild(
-            statusOptions
-          );
-
-
-          item.appendChild(
-            editInputs
-          );
-
-
-          const saveButton =
-            document.createElement(
-              "button"
-            );
-
-
-          saveButton.textContent =
-            "保存";
-
-
-          const cancelButton =
-            document.createElement(
-              "button"
-            );
-
-
-          cancelButton.textContent =
-            "キャンセル";
-
-
-          const editActions =
-            document.createElement(
-              "div"
-            );
-
-
-          editActions.className =
-            "edit-actions";
-
-
-          editActions.appendChild(
-            saveButton
-          );
-
-          editActions.appendChild(
-            cancelButton
-          );
-
-
-          item.appendChild(
-            editActions
-          );
-
-
-          saveButton.addEventListener(
-            "click",
-            () => {
-
-              const newName =
-                nameInput.value.trim();
-
-
-              if (!newName) {
-
-                alert(
-                  "名前を入力してください"
-                );
-
-                return;
-
-              }
-
-
-              member.name =
-                newName;
-
-
-              member.statuses =
-                Array.from(
-
-                  item.querySelectorAll(
-                    'input[type="checkbox"]:checked'
-                  )
-
-                ).map(
-                  checkbox =>
-                    checkbox.value
-                );
-
-
-              renderIndividual();
-
-            }
-          );
-
-
-          cancelButton.addEventListener(
-            "click",
-            () => {
-
-              renderIndividual();
-
-            }
-          );
-
-        }
-      );
-
-
-      // 削除
-
-      deleteButton.addEventListener(
-        "click",
-        () => {
-
-          members =
-            members.filter(
-              item =>
-                item.id !== member.id
-            );
-
-
-          renderIndividual();
-
-        }
-      );
-
-
-      memberList.appendChild(
-        item
-      );
-
+        <div class="edit-actions">
+          <button type="button" class="secondary-button member-cancel-btn">キャンセル</button>
+          <button type="button" class="member-save-btn">保存</button>
+        </div>`;
+      memberList.appendChild(row);
+
+      row.querySelector(".member-cancel-btn").addEventListener("click", () => {
+        editingMemberId = null;
+        renderMemberList();
+      });
+      row.querySelector(".member-save-btn").addEventListener("click", () => {
+        const name = row.querySelector(".edit-member-name").value.trim();
+        if (!name) return alert("参加者名を入力してください");
+        const selectedStatuses = Array.from(row.querySelectorAll(".edit-member-statuses input[type=checkbox]:checked")).map(cb => cb.value);
+        const target = members.find(mem => mem.id === m.id);
+        target.name = name; target.statuses = selectedStatuses;
+        editingMemberId = null;
+        renderMemberList();
+      });
+    } else {
+      const statusNames = (m.statuses || []).map(id => statuses.find(s => s.id === id)?.name).filter(Boolean).join("/");
+      row.className = "list-item";
+      row.innerHTML = `
+        <div>
+          <strong>${m.name}</strong>
+          ${statusNames ? `<span>${statusNames}</span>` : ""}
+        </div>
+        <div class="item-actions">
+          <button type="button" class="edit-button member-edit-btn" data-id="${m.id}">編集</button>
+          <button type="button" class="secondary-button member-delete-btn" data-id="${m.id}">削除</button>
+        </div>`;
+      memberList.appendChild(row);
     }
-  );
+  });
 
+  memberList.querySelectorAll(".member-edit-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      editingMemberId = btn.dataset.id;
+      renderMemberList();
+    });
+  });
+  memberList.querySelectorAll(".member-delete-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.id;
+      if (!confirm("この参加者を削除してもよろしいですか？")) return;
+      members = members.filter(m => m.id !== id);
+      if (editingMemberId === id) editingMemberId = null;
+      renderMemberList();
+    });
+  });
 }
-
-
-// ========================================
-// 個人モード描画
-// ========================================
 
 function renderIndividual() {
-
   renderStatusList();
-
   renderMemberStatusOptions();
-
   renderMemberList();
-
 }
 
-
-// ========================================
-// 参加グループ追加
-// ========================================
-
-groupActualPrice.addEventListener(
-  "input",
-  updateBurdenFromActual
-);
-
-groupBasePrice.addEventListener(
-  "input",
-  updateBurdenFromActual
-);
-
-
-
-addGroupButton.addEventListener(
-  "click",
-  () => {
-
-    const name =
-      groupName.value.trim();
-
-
-    const people =
-      Number(
-        groupPeople.value
-      );
-
-
-    // 実額が入力されている場合は、基準額から負担割合を逆算する
-    if (groupActualPrice.value !== "") {
-
-      const calculated =
-        calcBurdenFromPrice(
-          groupActualPrice.value,
-          groupBasePrice.value
-        );
-
-      if (calculated === null) {
-
-        alert(
-          "実額から逆算するには、基準額（1円以上）を入力してください"
-        );
-
-        return;
-
-      }
-
-      groupBurden.value =
-        calculated;
-
-    }
-
-
-    // 未入力は100%（通常どおり）として扱う
-    const burden =
-      groupBurden.value === "" ?
-        100 :
-        Number(
-          groupBurden.value
-        );
-
-
-    if (!name) {
-
-      alert(
-        "参加グループ名を入力してください"
-      );
-
-      return;
-
-    }
-
-
-    if (
-      !people ||
-      people <= 0
-    ) {
-
-      alert(
-        "人数を入力してください"
-      );
-
-      return;
-
-    }
-
-
-    if (
-
-      isNaN(burden) ||
-
-      burden < BURDEN_MIN ||
-
-      burden > BURDEN_MAX
-
-    ) {
-
-      alert(
-        `負担割合は${BURDEN_MIN}〜${BURDEN_MAX}%で入力してください`
-      );
-
-      return;
-
-    }
-
-
-    groups.push({
-
-      id:
-        createId(),
-
-      name,
-
-      people,
-
-      burden
-
-    });
-
-
-    groupName.value =
-      "";
-
-    groupPeople.value =
-      "";
-
-    groupBurden.value =
-      "";
-
-    groupActualPrice.value =
-      "";
-
-
-    renderGroup();
-
-  }
-);
-
-
-// ========================================
-// 団体一覧
-// ========================================
-
-function renderGroup() {
-
-  groupList.innerHTML =
-    "";
-
-
-  if (
-    groups.length === 0
-  ) {
-
-    groupList.innerHTML =
-      `
-      <p class="empty">
-        参加グループはまだありません
-      </p>
-      `;
-
-    return;
-
-  }
-
-
-  groups.forEach(
-    group => {
-
-      const item =
-        document.createElement(
-          "div"
-        );
-
-
-      item.className =
-        "list-item";
-
-
-      item.innerHTML = `
-
-        <div>
-
-          <strong>
-            ${group.name}
-          </strong>
-
-          <span>
-
-            ${group.people}人
-            ・
-            ${formatBurden(
-              getGroupBurden(group)
-            )}
-
-          </span>
-
+addMemberButton.addEventListener("click", () => {
+  const name = memberName.value.trim();
+  if (!name) return alert("参加者名を入力してください");
+
+  const selectedStatuses = Array.from(memberStatusOptions.querySelectorAll("input[type=checkbox]:checked")).map(cb => cb.value);
+  members.push({ id: createId(), name, statuses: selectedStatuses });
+  memberName.value = "";
+  memberStatusOptions.querySelectorAll("input[type=checkbox]").forEach(cb => cb.checked = false);
+  renderMemberList();
+});
+
+function renderGroupList() {
+  groupList.innerHTML = "";
+  if (!groups.length) { groupList.innerHTML = `<p class="empty">グループはまだありません</p>`; return; }
+
+  groups.forEach(g => {
+    const row = document.createElement("div");
+
+    if (editingGroupId === g.id) {
+      row.className = "list-item is-editing";
+      row.innerHTML = `
+        <div class="edit-inputs edit-fields-row">
+          <input type="text" class="edit-group-name" value="${g.name}" placeholder="グループ名">
+          <input type="number" class="edit-group-people" value="${g.people}" placeholder="人数" min="1">
+          <div class="discount-input-wrapper">
+            <input type="number" class="edit-group-burden" value="${getGroupBurdenRate(g)}" min="0" max="1000">
+            <span>%</span>
+          </div>
         </div>
-
-      `;
-
-
-      const actions =
-        document.createElement(
-          "div"
-        );
-
-
-      actions.className =
-        "item-actions";
-
-
-      const editButton =
-        document.createElement(
-          "button"
-        );
-
-
-      editButton.textContent =
-        "編集";
-
-
-      const deleteButton =
-        document.createElement(
-          "button"
-        );
-
-
-      deleteButton.textContent =
-        "削除";
-
-
-      actions.appendChild(
-        editButton
-      );
-
-      actions.appendChild(
-        deleteButton
-      );
-
-
-      item.appendChild(
-        actions
-      );
-
-
-      // 編集
-
-      editButton.addEventListener(
-        "click",
-        () => {
-
-          item.innerHTML =
-            "";
-
-
-          item.classList.add(
-            "is-editing"
-          );
-
-
-          const nameInput =
-            document.createElement(
-              "input"
-            );
-
-
-          nameInput.value =
-            group.name;
-
-
-          const peopleInput =
-            document.createElement(
-              "input"
-            );
-
-
-          peopleInput.type =
-            "number";
-
-          peopleInput.value =
-            group.people;
-
-
-          const burdenField =
-            createBurdenField(
-              getGroupBurden(group)
-            );
-
-
-          const editInputs =
-            document.createElement(
-              "div"
-            );
-
-
-          editInputs.className =
-            "edit-inputs";
-
-
-          editInputs.appendChild(
-            nameInput
-          );
-
-          editInputs.appendChild(
-            peopleInput
-          );
-
-          editInputs.appendChild(
-            burdenField.field
-          );
-
-
-          // 実額から逆算（基準額が設定されている場合）
-          const actualEditInput =
-            document.createElement(
-              "input"
-            );
-
-          actualEditInput.type =
-            "number";
-
-          actualEditInput.min =
-            0;
-
-          actualEditInput.step =
-            "any";
-
-          actualEditInput.placeholder =
-            "実額から逆算（円）";
-
-          actualEditInput.addEventListener(
-            "input",
-            () => {
-
-              const calculated =
-                calcBurdenFromPrice(
-                  actualEditInput.value,
-                  groupBasePrice.value
-                );
-
-              if (calculated !== null) {
-
-                burdenField.input.value =
-                  calculated;
-
-              }
-
-            }
-          );
-
-          editInputs.appendChild(
-            actualEditInput
-          );
-
-
-          const saveButton =
-            document.createElement(
-              "button"
-            );
-
-
-          saveButton.textContent =
-            "保存";
-
-
-          const cancelButton =
-            document.createElement(
-              "button"
-            );
-
-
-          cancelButton.textContent =
-            "キャンセル";
-
-
-          const editActions =
-            document.createElement(
-              "div"
-            );
-
-
-          editActions.className =
-            "edit-actions";
-
-
-          editActions.appendChild(
-            saveButton
-          );
-
-          editActions.appendChild(
-            cancelButton
-          );
-
-
-          item.appendChild(
-            editInputs
-          );
-
-          item.appendChild(
-            editActions
-          );
-
-
-          saveButton.addEventListener(
-            "click",
-            () => {
-
-              const newName =
-                nameInput.value.trim();
-
-
-              const newPeople =
-                Number(
-                  peopleInput.value
-                );
-
-
-              const newBurden =
-                Number(
-                  burdenField.input.value
-                );
-
-
-              if (
-
-                !newName ||
-
-                !newPeople ||
-
-                newPeople <= 0 ||
-
-                burdenField.input.value === "" ||
-
-                isNaN(newBurden) ||
-
-                newBurden < BURDEN_MIN ||
-
-                newBurden > BURDEN_MAX
-
-              ) {
-
-                alert(
-                  "入力内容を確認してください"
-                );
-
-                return;
-
-              }
-
-
-              group.name =
-                newName;
-
-              group.people =
-                newPeople;
-
-              group.burden =
-                newBurden;
-
-              // 旧データのdiscountは残さない
-              delete group.discount;
-
-
-              renderGroup();
-
-            }
-          );
-
-
-          cancelButton.addEventListener(
-            "click",
-            () => {
-
-              renderGroup();
-
-            }
-          );
-
-        }
-      );
-
-
-      // 削除
-
-      deleteButton.addEventListener(
-        "click",
-        () => {
-
-          groups =
-            groups.filter(
-              item =>
-                item.id !== group.id
-            );
-
-
-          renderGroup();
-
-        }
-      );
-
-
-      groupList.appendChild(
-        item
-      );
-
+        <div class="edit-actions">
+          <button type="button" class="secondary-button group-cancel-btn">キャンセル</button>
+          <button type="button" class="group-save-btn">保存</button>
+        </div>`;
+      groupList.appendChild(row);
+
+      row.querySelector(".group-cancel-btn").addEventListener("click", () => {
+        editingGroupId = null;
+        renderGroupList();
+      });
+      row.querySelector(".group-save-btn").addEventListener("click", () => {
+        const name = row.querySelector(".edit-group-name").value.trim();
+        const people = Number(row.querySelector(".edit-group-people").value);
+        const burdenRateInput = row.querySelector(".edit-group-burden").value;
+        const burdenRate = Number(burdenRateInput === "" ? 100 : burdenRateInput);
+        if (!name) return alert("グループ名を入力してください");
+        if (!people || people <= 0) return alert("正しい人数を入力してください");
+        if (isNaN(burdenRate) || burdenRate < 0 || burdenRate > 1000) return alert("負担割合は0〜1000で入力してください（100%が基準です）");
+
+        const target = groups.find(grp => grp.id === g.id);
+        target.name = name; target.people = people; target.burdenRate = burdenRate;
+        delete target.discount;
+        editingGroupId = null;
+        renderGroupList();
+      });
+    } else {
+      row.className = "list-item";
+      row.innerHTML = `
+        <div>
+          <strong>${g.name}</strong>
+          <span>${g.people}人・${formatBurdenRate(getGroupBurdenRate(g))}</span>
+        </div>
+        <div class="item-actions">
+          <button type="button" class="edit-button group-edit-btn" data-id="${g.id}">編集</button>
+          <button type="button" class="secondary-button group-delete-btn" data-id="${g.id}">削除</button>
+        </div>`;
+      groupList.appendChild(row);
     }
-  );
+  });
 
+  groupList.querySelectorAll(".group-edit-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      editingGroupId = btn.dataset.id;
+      renderGroupList();
+    });
+  });
+  groupList.querySelectorAll(".group-delete-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.id;
+      if (!confirm("このグループを削除してもよろしいですか？")) return;
+      groups = groups.filter(g => g.id !== id);
+      if (editingGroupId === id) editingGroupId = null;
+      renderGroupList();
+    });
+  });
 }
 
-
-// ========================================
-// イベント作成 / 保存
-// ========================================
-
-createEventButton.addEventListener(
-  "click",
-  async () => {
-
-    const name =
-      eventName.value.trim();
-
-
-    if (!name) {
-
-      alert(
-        "イベント名を入力してください"
-      );
-
-      return;
-
-    }
-
-
-    const isNewEvent =
-      !eventId;
-
-
-    let id =
-      eventId;
-
-
-    if (!id) {
-
-      id =
-        createId();
-
-    }
-
-
-    // ------------------------------------
-    // 最初の支払い（団体モード・新規作成時のみ）
-    // ------------------------------------
-
-    if (
-      isNewEvent &&
-      currentMode === "group" &&
-      groupFirstPaymentAmount &&
-      groupFirstPaymentAmount.value !== ""
-    ) {
-
-      const firstPaymentAmount =
-        Number(
-          groupFirstPaymentAmount.value
-        );
-
-
-      if (
-        !firstPaymentAmount ||
-        firstPaymentAmount <= 0
-      ) {
-
-        alert(
-          "最初の支払いの金額を正しく入力してください"
-        );
-
-        return;
-
-      }
-
-
-      groupPayments = [
-
-        ...groupPayments,
-
-        {
-
-          id:
-            createId(),
-
-          amount:
-            firstPaymentAmount,
-
-          // 内容はイベント名を自動的に使用
-          description:
-            name,
-
-          payerName:
-            groupFirstPaymentPayerName ?
-              groupFirstPaymentPayerName.value.trim() :
-              ""
-
-        }
-
-      ];
-
-    }
-
-
-    const eventRef =
-      doc(
-        db,
-        "events",
-        id
-      );
-
-
-    try {
-
-      await setDoc(
-
-        eventRef,
-
-        {
-
-          name,
-
-          mode:
-            currentMode,
-
-          statuses,
-
-          members,
-
-          groups,
-
-          // 逆算用の基準額（未入力は null）
-          basePrice:
-            groupBasePrice.value === "" ?
-              null :
-              Number(
-                groupBasePrice.value
-              ),
-
-          payments,
-
-          groupPayments
-
-        },
-
-        {
-          merge: true
-        }
-
-      );
-
-
-      location.href =
-        `event.html?id=${id}`;
-
-    }
-
-    catch (error) {
-
-      console.error(
-        error
-      );
-
-
-      alert(
-        "保存に失敗しました"
-      );
-
-    }
-
-  }
-);
-
-
-// ========================================
-// イベントページに戻る
-// ========================================
-
-backToEventButton.addEventListener(
-  "click",
-  () => {
-
-    if (!eventId) {
-
-      return;
-
-    }
-
-
-    location.href =
-      `event.html?id=${eventId}`;
-
-  }
-);
-
-
-// ========================================
-// 既存イベント読み込み
-// ========================================
-
-async function loadEvent() {
-
-  if (!eventId) {
-
-    renderIndividual();
-
-    renderGroup();
-
-    return;
-
-  }
-
+addGroupButton.addEventListener("click", () => {
+  const name = groupName.value.trim();
+  const people = Number(groupPeople.value);
+  const burdenRate = Number(groupBurdenRate.value === "" ? 100 : groupBurdenRate.value);
+  if (!name) return alert("グループ名を入力してください");
+  if (!people || people <= 0) return alert("正しい人数を入力してください");
+  if (isNaN(burdenRate) || burdenRate < 0 || burdenRate > 1000) return alert("負担割合は0〜1000で入力してください（100%が基準です）");
+
+  groups.push({ id: createId(), name, people, burdenRate });
+  groupName.value = ""; groupPeople.value = ""; groupBurdenRate.value = "100";
+  renderGroupList();
+});
+
+backToEventButton.addEventListener("click", () => { location.href = `event.html?id=${eventId}`; });
+
+createEventButton.addEventListener("click", async () => {
+  const name = eventName.value.trim();
+  if (!name) return alert("イベント名を入力してください");
+  if (currentMode === "individual" && !members.length) return alert("参加者を1人以上追加してください");
+  if (currentMode === "group" && !groups.length) return alert("グループを1つ以上追加してください");
+
+  const eventData = { name, mode: currentMode, statuses, members, groups };
 
   try {
-
-    const eventRef =
-      doc(
-        db,
-        "events",
-        eventId
-      );
-
-
-    const snapshot =
-      await getDoc(
-        eventRef
-      );
-
-
-    if (!snapshot.exists()) {
-
-      alert(
-        "イベントが見つかりません"
-      );
-
-
-      location.href =
-        "index.html";
-
+    if (eventId) {
+      await updateDoc(doc(db, "events", eventId), eventData);
+      location.href = `event.html?id=${eventId}`;
       return;
-
     }
 
-
-    const data =
-      snapshot.data();
-
-
-    eventName.value =
-      data.name || "";
-
-
-    currentMode =
-      data.mode ||
-      "individual";
-
-
-    statuses =
-      data.statuses || [];
-
-    members =
-      data.members || [];
-
-    groups =
-      data.groups || [];
-
-    if (
-      data.basePrice !== undefined &&
-      data.basePrice !== null
-    ) {
-
-      groupBasePrice.value =
-        data.basePrice;
-
+    const newId = await generateUniqueEventId();
+    let initialGroupPayments = [];
+    if (currentMode === "group") {
+      const firstAmount = Number(groupFirstPaymentAmount?.value);
+      if (firstAmount > 0) {
+        initialGroupPayments = [{
+          id: createId(),
+          amount: firstAmount,
+          description: name,
+          createdAt: new Date()
+        }];
+      }
     }
 
-    payments =
-      data.payments || [];
+    await setDoc(doc(db, "events", newId), {
+      ...eventData,
+      payments: [],
+      groupPayments: initialGroupPayments,
+      roundingUnit: 1
+    });
+    location.href = `event.html?id=${newId}`;
+  } catch (e) {
+    console.error(e);
+    alert("イベントの保存に失敗しました");
+  }
+});
 
-    groupPayments =
-      data.groupPayments || [];
+async function loadExistingEvent() {
+  try {
+    const snapshot = await getDoc(doc(db, "events", eventId));
+    if (!snapshot.exists()) { alert("イベントが見つかりません"); location.href = "index.html"; return; }
 
+    const data = snapshot.data();
+    eventName.value = data.name || "";
+    updateGroupFirstPaymentPreview();
 
-    if (
-      currentMode === "group"
-    ) {
+    statuses = data.statuses || [];
+    members = data.members || [];
+    groups = data.groups || [];
+    payments = data.payments || [];
+    groupPayments = data.groupPayments || [];
 
-      individualMode.style.display =
-        "none";
-
-      groupMode.style.display =
-        "block";
-
-
-      groupModeButton.classList.add(
-        "active"
-      );
-
-      individualModeButton.classList.remove(
-        "active"
-      );
-
-    }
-
-
-    createEventButton.textContent =
-      "変更を保存";
-
-
-    backToEventButton.style.display =
-      "inline-block";
-
-
-    // 既存イベントでは「最初の支払い」は使わない
-    // （支払いの追加はイベントページから行うため）
-
-    if (groupFirstPaymentSection) {
-
-      groupFirstPaymentSection.style.display =
-        "none";
-
-    }
-
+    currentMode = data.mode || "individual";
+    if (currentMode === "group") groupModeButton.click();
+    else individualModeButton.click();
 
     renderIndividual();
+    renderGroupList();
 
-    renderGroup();
-
+    if (groupFirstPaymentSection) groupFirstPaymentSection.style.display = "none";
+    createEventButton.textContent = "変更を保存";
+    backToEventButton.style.display = "block";
+  } catch (e) {
+    console.error(e);
+    alert("イベントの読み込みに失敗しました");
   }
-
-  catch (error) {
-
-    console.error(
-      error
-    );
-
-
-    alert(
-      "イベントの読み込みに失敗しました"
-    );
-
-  }
-
 }
 
-
-// ========================================
-// 初期化
-// ========================================
-
-loadEvent();
+if (eventId) {
+  loadExistingEvent();
+} else {
+  renderIndividual();
+  renderGroupList();
+}
