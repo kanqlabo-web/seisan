@@ -52,26 +52,19 @@
     </div>
     <div id="groupMode" style="display:none">
       <section class="card">
-        <h2>参加グループ</h2>
-        <p class="section-description">グループごとの人数と負担割合を設定できます。<br>負担割合は100%が基準（頭数どおりの通常負担）です。100%より低いと1人あたりの負担が軽くなり、高いと重くなります。</p>
-        <p class="field-hint">グループ名 <span class="required-mark">*</span>、人数 <span class="required-mark">*</span>、負担割合 <span class="required-mark">*</span></p>
-        <div class="input-row">
-          <input type="text" id="groupName" placeholder="例：1期">
-          <input type="number" id="groupPeople" placeholder="人数">
-          <div class="discount-input-wrapper">
-            <input type="number" id="groupBurdenRate" placeholder="負担割合" value="100" min="0" max="1000">
-            <span>%</span>
-          </div>
-          <button id="addGroupButton">追加</button>
-        </div>
-        <div id="groupList"></div>
+        <h2>グループと人数</h2>
+        <div id="groupRows" class="group-rows"></div>
+        <button type="button" id="addGroupRowButton" class="add-row-button">＋ グループを追加</button>
+        <label class="toggle-line"><input type="checkbox" id="useBurdenRate"><span>グループごとに負担を変える（例：先輩は多め）</span></label>
+        <p id="burdenRateHint" class="field-hint" hidden>100%がふつう。120%なら2割多め、80%なら2割少なめになります。</p>
       </section>
       <section id="groupFirstPaymentSection" class="card">
-        <h2>最初の支払い</h2>
-        <p class="section-description">グループの作成と同時に、最初の支払いを登録できます。<br>内容はイベント名（「<span id="groupFirstPaymentEventNamePreview">イベント名</span>」）が自動的に使われます。<br>空欄のままでもグループは作成できます。</p>
-        <div class="input-row">
-          <input type="number" id="groupFirstPaymentAmount" placeholder="金額（例：30000）" min="1">
+        <h2>合計金額<span class="optional-tag">（あとからでもOK）</span></h2>
+        <div class="big-amount-input">
+          <span>¥</span>
+          <input type="number" id="groupFirstPaymentAmount" inputmode="numeric" pattern="[0-9]*" placeholder="30000" min="1">
         </div>
+        <p class="hint">金額が決まったら、次の画面で1人あたりの金額をクルクル回して調整できます。</p>
       </section>
     </div>
     <section class="create-section">

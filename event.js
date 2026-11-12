@@ -271,51 +271,104 @@ function computeGroupPaymentShares(p, groups, unit) {
   return { targets, shareItems, rounded, amount };
 }
 
+// 手動調整（スロット）で決めた1人あたりの金額。グループのオブジェクト内に保存する
+// （Firestoreルールがトップレベルの項目名を固定しているため、新しい項目はグループの中に持たせる）
+const getPerPersonOverride = g => {
+  const v = g.perPersonOverride;
+  return v === undefined || v === null || v === "" || isNaN(Number(v)) ? null : Number(v);
+};
+
+// グループごとの金額を計算する。
+// 手動調整したグループはその金額で固定し、残りの金額を調整していないグループで（今までどおりの比率と端数処理で）分け合う。
+function computeGroupTotals(groups, groupPayments, unit) {
+  const paidTotal = groupPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+  const autoTotals = {}, rawTotals = {};
+  groups.forEach(g => { autoTotals[g.id] = 0; rawTotals[g.id] = 0; });
+  // 支払いごとに端数処理した金額を積み上げてグループごとの合計を求める（明細の内訳と一致させるため）
+  groupPayments.forEach(p => {
+    const { shareItems, rounded } = computeGroupPaymentShares(p, groups, unit);
+    shareItems.forEach((item, i) => {
+      autoTotals[item.group.id] += rounded[i].total;
+      rawTotals[item.group.id] += item.rawShare;
+    });
+  });
+
+  const fixed = groups.filter(g => getPerPersonOverride(g) !== null);
+  const free = groups.filter(g => getPerPersonOverride(g) === null);
+  const totals = {};
+
+  if (!fixed.length) {
+    groups.forEach(g => { totals[g.id] = autoTotals[g.id]; });
+  } else {
+    fixed.forEach(g => { totals[g.id] = getPerPersonOverride(g) * Number(g.people); });
+    const fixedSum = fixed.reduce((sum, g) => sum + totals[g.id], 0);
+    const remaining = Math.max(0, paidTotal - fixedSum);
+    const rawFreeSum = free.reduce((sum, g) => sum + rawTotals[g.id], 0);
+    const items = free.map(g => ({
+      people: Number(g.people),
+      rate: getGroupBurdenRate(g),
+      rawShare: rawFreeSum > 0 ? remaining * rawTotals[g.id] / rawFreeSum : 0
+    }));
+    const rounded = remaining > 0 && rawFreeSum > 0 ? roundGroupAmounts(items, remaining, unit) : items.map(() => ({ total: 0 }));
+    free.forEach((g, i) => { totals[g.id] = rounded[i].total; });
+  }
+
+  const resultList = groups.map(g => {
+    const people = Number(g.people);
+    const total = totals[g.id] || 0;
+    return {
+      id: g.id, name: g.name, people, burdenRate: getGroupBurdenRate(g), total,
+      perPerson: people > 0 ? total / people : 0,
+      autoPerPerson: people > 0 ? autoTotals[g.id] / people : 0,
+      isManual: getPerPersonOverride(g) !== null
+    };
+  });
+  const collectedTotal = resultList.reduce((sum, r) => sum + r.total, 0);
+  return { paidTotal, resultList, collectedTotal };
+}
+
+const diffText = diff => diff > 0 ? `${formatYen(diff)} 多く集まります`
+  : diff < 0 ? `${formatYen(-diff)} 足りません` : "ぴったりです";
+
+let latestGroupData = null; // スロットで調整中にプレビューを出すため、最新のグループ・支払いを覚えておく
+
 function renderGroupResult(groups, groupPayments, roundingUnit) {
   if (!groups.length) { resultArea.innerHTML = `<p class="empty">グループがまだありません</p>`; return; }
   if (!groupPayments.length) { resultArea.innerHTML = `<p class="empty">支払いを追加するとここに精算結果が表示されます</p>`; return; }
 
   const unit = ROUNDING_UNIT_OPTIONS.includes(Number(roundingUnit)) ? Number(roundingUnit) : 1;
-  const paidTotal = groupPayments.reduce((sum, p) => sum + Number(p.amount), 0);
-
-  // 支払いごとに端数処理した金額を積み上げてグループごとの合計を求める（明細の内訳と一致させるため）
-  const totalsByGroupId = {};
-  groups.forEach(g => { totalsByGroupId[g.id] = 0; });
-  groupPayments.forEach(p => {
-    const { shareItems, rounded } = computeGroupPaymentShares(p, groups, unit);
-    shareItems.forEach((item, i) => { totalsByGroupId[item.group.id] += rounded[i].total; });
-  });
-
-  const resultList = groups.map(g => {
-    const people = Number(g.people);
-    const total = totalsByGroupId[g.id] || 0;
-    return { id: g.id, name: g.name, people, burdenRate: getGroupBurdenRate(g), total, perPerson: people > 0 ? total / people : 0 };
-  });
-
-  const collectedTotal = resultList.reduce((sum, r) => sum + r.total, 0);
+  latestGroupData = { groups, groupPayments, unit };
+  const { paidTotal, resultList, collectedTotal } = computeGroupTotals(groups, groupPayments, unit);
   const totalDiff = collectedTotal - paidTotal;
-  const diffLabel = totalDiff > 0 ? `・誤差 +${formatYen(totalDiff)}` : "";
+  const hasManual = resultList.some(r => r.isManual);
+  const diffLabel = hasManual
+    ? `<span class="${totalDiff < 0 ? "diff-short" : ""}">・${diffText(totalDiff)}</span>`
+    : (totalDiff > 0 ? `・誤差 +${formatYen(totalDiff)}` : "");
 
   let html = `
     <div class="group-summary"><span>支払い合計</span><strong>${formatYen(paidTotal)}</strong></div>
-    <div class="group-summary-sub"><span>集金合計（端数調整後）${diffLabel}</span><strong>${formatYen(collectedTotal)}</strong></div>
-    <div class="group-rounding-row"><span>1人あたりの端数処理</span>
-      <select id="roundingUnitSelect">
-        ${ROUNDING_UNIT_OPTIONS.map(u => `<option value="${u}" ${u === unit ? "selected" : ""}>${u}円単位</option>`).join("")}
-      </select>
-    </div>`;
+    <div class="group-summary-sub"><span>集金合計${diffLabel}</span><strong>${formatYen(collectedTotal)}</strong></div>
+    <p class="slot-hint">金額をタップすると、スロットのように回して1人あたりの金額を調整できます</p>`;
 
   resultList.forEach(r => {
     html += `
-      <div class="group-result-card">
+      <button type="button" class="group-result-card group-result-tap" data-id="${r.id}">
         <div class="group-result-left">
-          <div class="group-result-name">${r.name}</div>
-          <div class="group-result-discount">${r.people}人・${formatBurdenRate(r.burdenRate)}</div>
+          <div class="group-result-name">${r.name}${r.isManual ? `<span class="manual-badge">手動</span>` : ""}</div>
+          <div class="group-result-discount">${r.people}人${r.burdenRate !== 100 ? `・${formatBurdenRate(r.burdenRate)}` : ""}</div>
           <div class="group-total">グループ合計 ${formatYen(r.total)}</div>
         </div>
-        <div class="group-result-amount"><strong>${formatYen(r.perPerson)}</strong></div>
-      </div>`;
+        <div class="group-result-amount"><strong>${formatYen(r.perPerson)}</strong><span class="group-result-edit">調整 ›</span></div>
+      </button>`;
   });
+
+  html += `
+    <div class="group-rounding-row"><span>自動計算の端数処理</span>
+      <select id="roundingUnitSelect">
+        ${ROUNDING_UNIT_OPTIONS.map(u => `<option value="${u}" ${u === unit ? "selected" : ""}>${u}円単位</option>`).join("")}
+      </select>
+    </div>
+    ${hasManual ? `<button type="button" id="resetAllOverridesButton" class="text-button">手動調整をすべて元に戻す</button>` : ""}`;
   resultArea.innerHTML = html;
 
   resultArea.querySelector("#roundingUnitSelect").addEventListener("change", async e => {
@@ -323,6 +376,219 @@ function renderGroupResult(groups, groupPayments, roundingUnit) {
       await updateDoc(doc(db, "events", eventId), { roundingUnit: Number(e.target.value) });
     } catch (err) { console.error(err); alert("端数処理の設定の保存に失敗しました"); }
   });
+  resultArea.querySelectorAll(".group-result-tap").forEach(btn => {
+    btn.addEventListener("click", () => openSlotSheet(btn.dataset.id));
+  });
+  resultArea.querySelector("#resetAllOverridesButton")?.addEventListener("click", async () => {
+    if (!confirm("手動で調整した金額をすべて自動計算に戻しますか？")) return;
+    await saveGroupOverrides(groups.map(g => { const c = { ...g }; delete c.perPersonOverride; return c; }));
+  });
+}
+
+async function saveGroupOverrides(updatedGroups) {
+  try {
+    await updateDoc(doc(db, "events", eventId), { groups: updatedGroups });
+  } catch (err) { console.error(err); alert("金額の保存に失敗しました"); }
+}
+
+// ----- スロット（ドラム）式の金額調整 -----
+// 各桁を縦にスワイプして回す。0〜9を何周分か並べ、止まったら真ん中の周へこっそり戻すことで、どこまでも回せるようにする。
+const SLOT_ITEM_HEIGHT = 48, SLOT_LOOPS = 7;
+let slotState = null;
+
+function buildSlotSheet() {
+  let sheet = document.getElementById("slotSheet");
+  if (sheet) return sheet;
+  sheet = document.createElement("div");
+  sheet.id = "slotSheet";
+  sheet.className = "slot-sheet-backdrop";
+  sheet.hidden = true;
+  sheet.innerHTML = `
+    <div class="slot-sheet" role="dialog" aria-modal="true" aria-labelledby="slotTitle">
+      <div class="slot-sheet-handle"></div>
+      <h3 id="slotTitle" class="slot-title"></h3>
+      <p class="slot-sub" id="slotSub"></p>
+      <div class="slot-machine">
+        <span class="slot-yen">¥</span>
+        <div class="slot-reels" id="slotReels"></div>
+        <span class="slot-per">/人</span>
+      </div>
+      <div class="slot-steps" id="slotSteps"></div>
+      <div class="slot-preview" id="slotPreview"></div>
+      <div class="slot-actions">
+        <button type="button" class="secondary-button" id="slotResetButton">自動に戻す</button>
+        <button type="button" class="primary-button" id="slotSaveButton">決定</button>
+      </div>
+    </div>`;
+  document.body.appendChild(sheet);
+  sheet.addEventListener("click", e => { if (e.target === sheet) closeSlotSheet(); });
+  sheet.querySelector("#slotSaveButton").addEventListener("click", () => commitSlot(false));
+  sheet.querySelector("#slotResetButton").addEventListener("click", () => commitSlot(true));
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && !sheet.hidden) closeSlotSheet(); });
+  return sheet;
+}
+
+function openSlotSheet(groupId) {
+  if (!latestGroupData) return;
+  const { groups, groupPayments, unit } = latestGroupData;
+  const group = groups.find(g => g.id === groupId);
+  if (!group) return;
+  const { resultList } = computeGroupTotals(groups, groupPayments, unit);
+  const r = resultList.find(x => x.id === groupId);
+  const value = Math.max(0, Math.round(r.perPerson));
+  const digitCount = Math.min(7, Math.max(4, String(value).length + 1));
+  // 端数処理の単位より下の桁（100円単位なら下2桁）は0で固定し、回せないようにする
+  const lockedDigits = Math.min(digitCount - 1, Math.floor(Math.log10(unit) + 1e-9));
+  const step = 10 ** lockedDigits;
+
+  const sheet = buildSlotSheet();
+  slotState = { groupId, digitCount, lockedDigits, step, autoPerPerson: Math.round(r.autoPerPerson), reels: [] };
+  sheet.querySelector("#slotTitle").textContent = group.name;
+  sheet.querySelector("#slotSub").textContent = `${r.people}人・自動計算だと ${formatYen(r.autoPerPerson)}/人`;
+  sheet.querySelector("#slotResetButton").disabled = !r.isManual;
+
+  const reelsEl = sheet.querySelector("#slotReels");
+  reelsEl.innerHTML = "";
+  const digits = String(value).padStart(digitCount, "0").slice(-digitCount).split("").map(Number);
+  digits.forEach((d, i) => {
+    const place = digitCount - 1 - i; // 0が一の位
+    if (i > 0 && place % 3 === 2) {
+      const comma = document.createElement("span");
+      comma.className = "slot-comma"; comma.textContent = ",";
+      reelsEl.appendChild(comma);
+    }
+    const locked = place < lockedDigits;
+    const reel = document.createElement("div");
+    reel.className = `slot-reel${locked ? " is-locked" : ""}`;
+    reel.setAttribute("aria-label", `${["一", "十", "百", "千", "万", "十万", "百万"][place]}の位`);
+    const list = [];
+    for (let loop = 0; loop < SLOT_LOOPS; loop++) for (let n = 0; n < 10; n++) list.push(`<div class="slot-digit">${n}</div>`);
+    reel.innerHTML = `<div class="slot-pad"></div>${list.join("")}<div class="slot-pad"></div>`;
+    reelsEl.appendChild(reel);
+    const state = { el: reel, place, locked, digit: d };
+    slotState.reels.push(state);
+    if (!locked) attachReel(state);
+  });
+
+  sheet.querySelector("#slotSteps").innerHTML = [-10, -1, 1, 10].map(k =>
+    `<button type="button" class="slot-step" data-k="${k}">${k > 0 ? "+" : "−"}${formatYen(Math.abs(k) * step).replace("¥", "")}</button>`).join("");
+  sheet.querySelectorAll(".slot-step").forEach(btn => btn.addEventListener("click", () => {
+    setSlotValue(Math.max(0, getSlotValue() + Number(btn.dataset.k) * step), true);
+  }));
+
+  sheet.hidden = false;
+  document.body.classList.add("sheet-open");
+  // 表示されてから位置を合わせる（非表示のままだとスクロール位置を設定できないため）
+  requestAnimationFrame(() => {
+    slotState.reels.forEach(rs => scrollReelTo(rs, rs.digit, false));
+    updateSlotPreview();
+  });
+}
+
+function closeSlotSheet() {
+  const sheet = document.getElementById("slotSheet");
+  if (sheet) sheet.hidden = true;
+  document.body.classList.remove("sheet-open");
+  slotState = null;
+}
+
+function scrollReelTo(rs, digit, smooth) {
+  const middleLoop = Math.floor(SLOT_LOOPS / 2);
+  rs.el.scrollTo({ top: (middleLoop * 10 + digit) * SLOT_ITEM_HEIGHT, behavior: smooth ? "smooth" : "auto" });
+  rs.digit = digit;
+  highlightReel(rs);
+}
+
+function highlightReel(rs) {
+  const index = Math.round(rs.el.scrollTop / SLOT_ITEM_HEIGHT);
+  rs.el.querySelectorAll(".slot-digit").forEach((el, i) => el.classList.toggle("is-current", i === index));
+}
+
+function attachReel(rs) {
+  let settleTimer = null;
+  rs.el.addEventListener("scroll", () => {
+    const index = Math.round(rs.el.scrollTop / SLOT_ITEM_HEIGHT);
+    const digit = ((index % 10) + 10) % 10;
+    if (digit !== rs.digit) {
+      rs.digit = digit;
+      if (navigator.vibrate) { try { navigator.vibrate(4); } catch (_) { /* 非対応端末は無視 */ } }
+      updateSlotPreview();
+    }
+    highlightReel(rs);
+    clearTimeout(settleTimer);
+    // 回し終わったら、同じ数字のまま真ん中の周へ戻しておく（端まで行って止まらないように）
+    settleTimer = setTimeout(() => {
+      const middleLoop = Math.floor(SLOT_LOOPS / 2);
+      const target = (middleLoop * 10 + rs.digit) * SLOT_ITEM_HEIGHT;
+      if (Math.abs(rs.el.scrollTop - target) > SLOT_ITEM_HEIGHT * 5) rs.el.scrollTo({ top: target, behavior: "auto" });
+    }, 180);
+  }, { passive: true });
+  // PCでもマウスホイールで1目盛りずつ回せるようにする
+  rs.el.addEventListener("wheel", e => {
+    e.preventDefault();
+    const dir = Math.sign(e.deltaY);
+    if (!dir) return;
+    rs.el.scrollBy({ top: dir * SLOT_ITEM_HEIGHT, behavior: "smooth" });
+  }, { passive: false });
+  // 数字をタップしたら、その数字に合わせる
+  rs.el.addEventListener("click", e => {
+    const digitEl = e.target.closest(".slot-digit");
+    if (!digitEl) return;
+    const top = digitEl.offsetTop - rs.el.querySelector(".slot-pad").offsetHeight;
+    rs.el.scrollTo({ top, behavior: "smooth" });
+  });
+}
+
+function getSlotValue() {
+  if (!slotState) return 0;
+  return slotState.reels.reduce((sum, rs) => sum + (rs.locked ? 0 : rs.digit) * 10 ** rs.place, 0);
+}
+
+function setSlotValue(value, smooth) {
+  if (!slotState) return;
+  const max = 10 ** slotState.digitCount - slotState.step;
+  value = Math.min(max, Math.max(0, Math.round(value / slotState.step) * slotState.step));
+  slotState.reels.forEach(rs => {
+    if (rs.locked) return;
+    scrollReelTo(rs, Math.floor(value / 10 ** rs.place) % 10, smooth);
+  });
+  updateSlotPreview();
+}
+
+function groupsWithOverride(groupId, perPerson) {
+  return latestGroupData.groups.map(g => {
+    const c = { ...g };
+    if (g.id === groupId) {
+      if (perPerson === null) delete c.perPersonOverride; else c.perPersonOverride = perPerson;
+    }
+    return c;
+  });
+}
+
+function updateSlotPreview() {
+  if (!slotState || !latestGroupData) return;
+  const value = getSlotValue();
+  const { groupPayments, unit } = latestGroupData;
+  const preview = computeGroupTotals(groupsWithOverride(slotState.groupId, value), groupPayments, unit);
+  const me = preview.resultList.find(r => r.id === slotState.groupId);
+  const diff = preview.collectedTotal - preview.paidTotal;
+  const others = preview.resultList.filter(r => r.id !== slotState.groupId && !r.isManual);
+  document.getElementById("slotPreview").innerHTML = `
+    <div class="slot-preview-row"><span>このグループの合計</span><strong>${formatYen(me.total)}</strong></div>
+    ${others.length ? `<div class="slot-preview-row"><span>ほかのグループ（自動）</span><strong>${others.map(o => `${o.name} ${formatYen(o.perPerson)}`).join("・")}</strong></div>` : ""}
+    <div class="slot-preview-row ${diff < 0 ? "diff-short" : ""}"><span>全体</span><strong>${diffText(diff)}</strong></div>`;
+}
+
+async function commitSlot(reset) {
+  if (!slotState) return;
+  const value = reset ? null : getSlotValue();
+  const groupId = slotState.groupId;
+  // 自動計算と同じ金額に合わせた場合は、手動扱いにしない
+  const isSameAsAuto = value !== null && value === slotState.autoPerPerson
+    && !latestGroupData.groups.some(g => g.id !== groupId && getPerPersonOverride(g) !== null);
+  const updated = groupsWithOverride(groupId, isSameAsAuto ? null : value);
+  closeSlotSheet();
+  await saveGroupOverrides(updated);
 }
 
 function createPaymentCardList(payments, getPayerName, getParticipantsBadges, editPage) {
@@ -500,6 +766,9 @@ function renderExpenseDetailGroup(groupPayments, groups, roundingUnit) {
   if (!groupPayments.length) { burdenDetailList.innerHTML = `<p class="empty">支払いはまだありません</p>`; return; }
 
   const unit = ROUNDING_UNIT_OPTIONS.includes(Number(roundingUnit)) ? Number(roundingUnit) : 1;
+  if (groups.some(g => getPerPersonOverride(g) !== null)) {
+    burdenDetailList.innerHTML = `<p class="field-hint manual-note">※上の金額は手動で調整されています。ここに出ているのは自動計算の内訳です。</p>`;
+  }
 
   groupPayments.forEach(p => {
     const { targets, shareItems, rounded, amount } = computeGroupPaymentShares(p, groups, unit);

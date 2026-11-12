@@ -287,3 +287,83 @@ label > .required-mark { margin-left: 2px; }
   .individual-adjustment input { width: 55px; padding: 7px var(--gap-2); }
   .member-payment-row, .member-payment-header { padding: var(--gap-4); }
 }
+
+/* ===== 団体モード：スマホ向けのかんたん入力（index.html） ===== */
+.group-rows { display: flex; flex-direction: column; gap: var(--gap-3); }
+.group-row { display: flex; align-items: center; gap: var(--gap-3); }
+.group-row input { margin: 0; }
+.group-row-name { flex: 1 1 auto; min-width: 0; }
+.stepper { display: flex; align-items: center; flex: 0 0 auto; border: 1px solid #ccc; border-radius: var(--radius-sm); overflow: hidden; }
+.stepper-btn { width: 40px; height: 44px; padding: 0; background: #f4f4f4; color: var(--accent-color); border-radius: 0; font-size: 20px; font-weight: 700; }
+.stepper input { width: 44px; height: 44px; padding: 0; border: none; border-radius: 0; text-align: center; font-weight: 600; -moz-appearance: textfield; }
+.stepper input::-webkit-outer-spin-button, .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.stepper-unit { padding-right: var(--gap-2); color: #777; font-size: 13px; }
+.group-row-rate { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+.group-row-rate input { width: 62px; padding: var(--gap-4) var(--gap-2); text-align: right; }
+.group-row-rate span { color: #777; }
+.group-row-delete { width: 36px; height: 44px; flex: 0 0 auto; padding: 0; background: none; color: #aaa; font-size: 22px; }
+.group-row-delete:disabled { visibility: hidden; }
+/* 負担割合も入れるときは、名前を1行目いっぱいに使い、人数と割合を2行目に並べる */
+.group-row.with-rate { flex-wrap: wrap; padding-bottom: var(--gap-3); border-bottom: 1px solid #f0f0f0; }
+.group-row.with-rate .group-row-name { flex: 1 1 calc(100% - 44px); }
+.group-row.with-rate .group-row-delete { order: 1; }
+.group-row.with-rate .stepper, .group-row.with-rate .group-row-rate { order: 2; }
+.add-row-button { width: 100%; margin-top: var(--gap-4); padding: var(--gap-5); background: #fff; color: var(--accent-color); border: 1.5px dashed #b6c8bb; border-radius: var(--radius-sm); font-size: 14px; font-weight: 600; }
+.toggle-line { display: flex; align-items: center; gap: var(--gap-3); margin: var(--gap-7) 0 var(--gap-2); color: #555; font-size: 13px; cursor: pointer; }
+.toggle-line input { width: 18px; height: 18px; margin: 0; flex: 0 0 auto; }
+.big-amount-input { display: flex; align-items: center; gap: var(--gap-3); margin-bottom: var(--gap-3); }
+.big-amount-input span { font-size: 24px; font-weight: 700; color: #555; }
+.big-amount-input input { margin: 0; padding: var(--gap-5); font-size: 24px; font-weight: 700; letter-spacing: .02em; }
+
+/* ===== 団体モード：結果の金額をタップして調整（event.html） ===== */
+.slot-hint { margin: 0 0 var(--gap-3); color: #888; font-size: 12px; }
+.group-result-tap { width: 100%; background: none; color: inherit; border: none; border-bottom: 1px solid #eee; border-radius: 0; text-align: left; font-size: inherit; }
+.group-result-tap:hover { opacity: 1; background: #fafafa; }
+.group-result-amount { display: flex; flex-direction: column; align-items: flex-end; }
+.group-result-edit { margin-top: 2px; color: var(--accent-color); font-size: 12px; font-weight: 600; }
+.manual-badge { display: inline-block; margin-left: var(--gap-3); padding: 1px 6px; background: #fff4d6; color: #8a5a00; border-radius: 999px; font-size: 11px; font-weight: 600; vertical-align: 1px; }
+.diff-short, .diff-short strong { color: #c0392b !important; }
+.text-button { display: block; margin: 0 auto; padding: var(--gap-3); background: none; color: #888; font-size: 12px; text-decoration: underline; }
+.group-rounding-row { margin-top: var(--gap-5); }
+.manual-note { margin-bottom: var(--gap-5); }
+
+/* スロットのシート（画面下から出てくる） */
+body.sheet-open { overflow: hidden; }
+.slot-sheet-backdrop { position: fixed; inset: 0; z-index: 100; display: flex; align-items: flex-end; justify-content: center; background: rgba(0, 0, 0, .35); }
+.slot-sheet-backdrop[hidden] { display: none; }
+.slot-sheet { width: 100%; max-width: 520px; padding: var(--gap-3) var(--gap-9) calc(var(--gap-9) + env(safe-area-inset-bottom)); background: #fff; border-radius: 20px 20px 0 0; animation: slot-sheet-in .22s ease-out; }
+@keyframes slot-sheet-in { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+.slot-sheet-handle { width: 40px; height: 4px; margin: 0 auto var(--gap-5); background: #ddd; border-radius: 2px; }
+.slot-title { margin: 0; font-size: 18px; text-align: center; }
+.slot-sub { margin: var(--gap-1) 0 var(--gap-7); color: #888; font-size: 12px; text-align: center; }
+.slot-machine { display: flex; align-items: center; justify-content: center; gap: var(--gap-2); }
+.slot-yen, .slot-per { color: #555; font-size: 22px; font-weight: 700; }
+.slot-per { font-size: 14px; font-weight: 500; }
+.slot-reels { position: relative; display: flex; align-items: center; gap: 4px; padding: 0 var(--gap-2); background: #1f2a24; border-radius: var(--radius-lg); box-shadow: inset 0 2px 6px rgba(0, 0, 0, .4); }
+/* 真ん中の「当たり」ライン */
+.slot-reels::before { content: ""; position: absolute; left: 4px; right: 4px; top: 50%; height: 48px; transform: translateY(-50%); border-top: 2px solid #f5c542; border-bottom: 2px solid #f5c542; pointer-events: none; z-index: 2; }
+.slot-reel { position: relative; width: 38px; height: 144px; overflow-y: scroll; scroll-snap-type: y mandatory; scrollbar-width: none; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y;
+  -webkit-mask-image: linear-gradient(transparent, #000 30%, #000 70%, transparent); mask-image: linear-gradient(transparent, #000 30%, #000 70%, transparent); }
+.slot-reel::-webkit-scrollbar { display: none; }
+.slot-pad { height: 48px; }
+.slot-digit { height: 48px; display: flex; align-items: center; justify-content: center; scroll-snap-align: center; color: #8fa096; font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; user-select: none; cursor: pointer; }
+.slot-digit.is-current { color: #fff; }
+.slot-reel.is-locked { overflow: hidden; opacity: .45; }
+.slot-reel.is-locked .slot-digit { cursor: default; }
+.slot-comma { color: #8fa096; font-size: 24px; font-weight: 700; align-self: center; margin: 0 -2px; padding-top: 10px; }
+.slot-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--gap-3); margin: var(--gap-7) 0 var(--gap-5); }
+.slot-step { padding: var(--gap-4) 0; background: #eef3ef; color: var(--accent-color); font-size: 14px; font-weight: 700; }
+.slot-preview { padding: var(--gap-4) var(--gap-6); background: #f6f6f6; border-radius: var(--radius-md); }
+.slot-preview-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--gap-5); padding: var(--gap-2) 0; font-size: 13px; color: #555; }
+.slot-preview-row > span { flex-shrink: 0; }
+.slot-preview-row strong { text-align: right; color: #111; }
+.slot-actions { display: flex; gap: var(--gap-5); margin-top: var(--gap-7); }
+.slot-actions button { flex: 1; }
+.slot-actions .secondary-button:disabled { opacity: .4; }
+
+@media (max-width: 600px) {
+  /* スマホでは「作成」ボタンを画面下に固定し、親指ですぐ押せるようにする */
+  .create-section { position: sticky; bottom: 0; z-index: 10; margin-top: var(--gap-5); padding: var(--gap-5) var(--gap-10) calc(var(--gap-5) + env(safe-area-inset-bottom)); background: linear-gradient(rgba(255, 255, 255, 0), #fff 30%); }
+  .slot-reel { width: 34px; }
+  .group-row-name { flex-basis: 0; }
+}
