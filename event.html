@@ -1,244 +1,68 @@
 <!DOCTYPE html>
 <html lang="ja">
-
 <head>
-
   <meta charset="UTF-8">
-
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  >
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>清算くん</title>
-
-  <link
-    rel="stylesheet"
-    href="style.css"
-  >
-
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
 </head>
-
-
 <body>
-
   <div class="container">
-
-
-    <!-- =====================
-         上部ナビ
-    ====================== -->
-
     <div class="event-top-nav">
-
-      <a
-        href="index.html"
-        class="app-back-link"
-      >
-        ← 清算くん
-      </a>
-
+      <a href="index.html" class="app-back-link">← 清算くん</a>
     </div>
-
-
-    <!-- =====================
-         イベントタイトル
-    ====================== -->
-
     <section class="event-header">
-
       <div class="event-title-area">
-
         <div>
 
-          <p class="event-label">
-            EVENT
-          </p>
-
-          <h1 id="eventTitle">
-            イベントを読み込み中...
-          </h1>
-
+          <h1 id="eventTitle">イベントを読み込み中...</h1>
         </div>
-
-
-        <button
-          id="copyLinkButton"
-          class="copy-icon-button"
-          title="イベントリンクをコピー"
-        >
-          🔗
-        </button>
-
+        <button id="copyLinkButton" class="copy-icon-button" title="イベントリンクをコピー"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg></button>
       </div>
-
-
-      <a
-        href="#"
-        id="editEventButton"
-        class="event-settings-link"
-      >
-        参加者・ステータスを管理 →
-      </a>
-
+      <a href="#" id="editEventButton" class="event-settings-link">参加者・ステータスを管理 →</a>
     </section>
-
-
-    <!-- =====================
-         支払い追加
-    ====================== -->
-
     <section class="add-payment-section">
-
-      <button
-        id="addPaymentButton"
-        class="primary-button"
-      >
-        ＋ 支払いを追加
-      </button>
-
+      <button id="addPaymentButton" class="primary-button">＋ 建て替えを追加</button>
     </section>
-
-
-    <!-- =====================
-         支払い一覧
-    ====================== -->
-
     <section class="payment-list-section">
-
-      <h2 class="payment-list-title">
-        支払い一覧
-      </h2>
-
-
+      <h2 class="payment-list-title">建て替え一覧</h2>
       <div class="payment-list-card">
-
         <div id="paymentManagementList">
-
-          <p class="empty">
-            支払いはまだありません
-          </p>
-
+          <p class="empty">支払いはまだありません</p>
         </div>
-
       </div>
-
     </section>
-
-
-    <!-- =====================
-         精算結果
-    ====================== -->
-
-    <section class="card result-main-card">
-
+    <section class="card result-main-card card-no-divider">
       <div id="resultArea">
-
-        <p class="empty">
-          計算中...
-        </p>
-
+        <p class="empty">計算中...</p>
       </div>
-
     </section>
-
-
-    <!-- =====================
-         明細（折りたたみ）
-    ====================== -->
-
-    <section class="card collapsible-card">
-
-      <button
-        id="detailToggle"
-        class="collapsible-toggle"
-        type="button"
-      >
-        <span class="collapsible-toggle-text">
-          明細を見る
-        </span>
-
-        <span class="collapsible-icon">
-          ▼
-        </span>
+    <section class="card collapsible-card card-no-divider">
+      <button id="detailToggle" class="collapsible-toggle" type="button">
+        <span class="collapsible-toggle-text">明細を見る</span>
+        <span class="collapsible-icon">▼</span>
       </button>
-
-
-      <div
-        id="detailContent"
-        class="collapsible-content"
-        hidden
-      >
-
-        <!-- 最終的な負担額 -->
-
+      <div id="detailContent" class="collapsible-content" hidden>
         <div class="detail-block">
-
-          <h3
-            id="burdenBlockTitle"
-            class="detail-block-title"
-          >
-            支出
-          </h3>
-
-          <p
-            id="burdenBlockDesc"
-            class="section-description"
-          >
-            参加者をタップすると、内訳（各支払いでの負担額と割引理由・割引率）が開きます。
-          </p>
-
+          <h3 id="burdenBlockTitle" class="detail-block-title">支出</h3>
+          <p id="burdenBlockDesc" class="section-description">参加者をタップすると、内訳（各支払いでの負担額と割引理由・割引率）が開きます。</p>
           <div id="burdenDetailList">
-
-            <p class="empty">
-              支払いはまだありません
-            </p>
-
+            <p class="empty">支払いはまだありません</p>
           </div>
-
         </div>
-
-
-        <!-- 最終的な貸し借り（個人モードのみ） -->
-
-        <div
-          id="debtDetailBlock"
-          class="detail-block"
-        >
-
-          <h3 class="detail-block-title">
-            貸し借り
-          </h3>
-
-          <p class="section-description">
-            参加者をタップすると、内訳（誰にいくら払う・受け取るか）が開きます。
-            （精算方法とは別に、実際の貸し借り関係を表示します）
-          </p>
-
+        <div id="debtDetailBlock" class="detail-block">
+          <h3 class="detail-block-title">貸し借り</h3>
+          <p class="section-description">参加者をタップすると、内訳（誰にいくら払う・受け取るか）が開きます。（精算方法とは別に、実際の貸し借り関係を表示します）</p>
           <div id="debtDetailList">
-
-            <p class="empty">
-              貸し借りはまだありません
-            </p>
-
+            <p class="empty">貸し借りはまだありません</p>
           </div>
-
         </div>
-
       </div>
-
     </section>
-
-
   </div>
-
-
-  <script
-    type="module"
-    src="event.js"
-  ></script>
-
-
+  <script type="module" src="event.js"></script>
 </body>
-
 </html>

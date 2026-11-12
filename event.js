@@ -1,448 +1,327 @@
-// ========================================
-// 清算くん
-// イベント詳細ページ
-// ========================================
-
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-import {
-  getFirestore,
-  doc,
-  onSnapshot,
-  updateDoc
-} from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+import { getFirestore, doc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
-const firebaseConfig = {
+const app = initializeApp({
   apiKey: "AIzaSyBKbP74L4MwAOhwFXFNZbd1DFFv9M68Awo",
   authDomain: "k-sha-kun.firebaseapp.com",
   projectId: "k-sha-kun",
   storageBucket: "k-sha-kun.firebasestorage.app",
   messagingSenderId: "573497625446",
   appId: "1:573497625446:web:e056913eecdb00cac7d6a7"
-};
-
-const app = initializeApp(firebaseConfig);
+});
 const db = getFirestore(app);
+const eventId = new URLSearchParams(location.search).get("id");
 
-const params = new URLSearchParams(window.location.search);
-const eventId = params.get("id");
+if (!eventId) { alert("イベントが指定されていません"); location.href = "index.html"; }
 
-let currentMode = "individual";
-let currentPayments = [];
-let currentGroupPayments = [];
+let currentMode = "individual", currentPayments = [], currentGroupPayments = [], paymentListExpanded = false;
+const PAYMENT_LIST_VISIBLE_COUNT = 6, ROUNDING_UNIT_OPTIONS = [1, 10, 50, 100, 200, 500, 1000];
 
-const eventTitle = document.getElementById("eventTitle");
-const editEventButton = document.getElementById("editEventButton");
-const addPaymentButton = document.getElementById("addPaymentButton");
-const copyLinkButton = document.getElementById("copyLinkButton");
-const resultArea = document.getElementById("resultArea");
-const paymentManagementList = document.getElementById("paymentManagementList");
+const $ = id => document.getElementById(id);
+const eventTitle = $("eventTitle"), editEventButton = $("editEventButton"), addPaymentButton = $("addPaymentButton"),
+  copyLinkButton = $("copyLinkButton"), resultArea = $("resultArea"), paymentManagementList = $("paymentManagementList"),
+  detailToggle = $("detailToggle"), detailContent = $("detailContent"), burdenBlockTitle = $("burdenBlockTitle"),
+  burdenBlockDesc = $("burdenBlockDesc"), burdenDetailList = $("burdenDetailList"), debtDetailBlock = $("debtDetailBlock"),
+  debtDetailList = $("debtDetailList");
 
-const detailToggle = document.getElementById("detailToggle");
-const detailContent = document.getElementById("detailContent");
+const formatYen = a => `¥${Math.round(Number(a)).toLocaleString()}`;
+const formatDiscount = d => (d = Number(d)) > 0 ? `${d}%引き` : d < 0 ? `${Math.abs(d)}%増し` : "通常";
 
-const burdenBlockTitle = document.getElementById("burdenBlockTitle");
-const burdenBlockDesc = document.getElementById("burdenBlockDesc");
-const burdenDetailList = document.getElementById("burdenDetailList");
+// 団体の負担割合：100%が基準（頭数どおりの通常負担）。
+// 既存データにdiscount（割引率）しかない場合は自動的に負担割合へ変換する。
+const getGroupBurdenRate = g => (g.burdenRate !== undefined && g.burdenRate !== null && g.burdenRate !== "")
+  ? Number(g.burdenRate) : 100 - Number(g.discount || 0);
+const formatBurdenRate = rate => (rate = Number(rate)) === 100 ? "負担割合100%（基準）" : `負担割合${rate}%`;
 
-const debtDetailBlock = document.getElementById("debtDetailBlock");
-const debtDetailList = document.getElementById("debtDetailList");
+// 1人あたりの金額を単位ごとに切り上げ／切り捨てへ振り分け、
+// 「集金合計」が実際の支払い金額を下回らない範囲で、できるだけ近くなる組み合わせを選ぶ。
+// （支払いを立て替えた人が不足を被らないよう、集金不足は許容しない）
+// items: [{ people, rawShare, rate }]（rawShareはその団体が本来負担すべき厳密な金額、rateは負担割合）
+function roundGroupAmounts(items, amount, unit) {
+  const u = Number(unit) > 0 ? Number(unit) : 1;
 
-// 支払い一覧（直近6件のみ表示、残りは折りたたみ）
-const PAYMENT_LIST_VISIBLE_COUNT = 6;
-let paymentListExpanded = false;
+  const prepared = items.map(it => {
+    const people = Number(it.people) || 0;
+    const rawShare = Number(it.rawShare) || 0;
+    const rawPerPerson = people > 0 ? rawShare / people : 0;
+    // 浮動小数点の誤差でちょうどの金額が単位未満に丸まらないよう、わずかに補正する
+    const floorPerPerson = Math.floor(rawPerPerson / u + 1e-9) * u;
+    const ceilPerPerson = floorPerPerson + u;
+    return {
+      people,
+      floorPerPerson,
+      ceilPerPerson,
+      increment: u * people, // この団体を切り上げにした場合に増える集金額
+      remainder: rawShare - floorPerPerson * people, // 切り捨てた場合に不足する金額（0以上、increment未満）
+      // 負担割合が同じ団体は1人あたりの金額も本来同じになるはずなので、同じキーでまとめて扱う
+      rateKey: Math.round((Number(it.rate) || 0) * 1e6) / 1e6
+    };
+  });
 
-if (!eventId) {
-  alert("イベントが指定されていません");
-  location.href = "index.html";
+  // 負担割合が同じ団体は「納得感」のため、切り上げ・切り捨てが割れて1人あたりの金額に差が出ないよう、
+  // 常にまとめて同じ判定にする（人数が異なっていても、切り上げ時に増える金額と端数の合計を団体単位でなくグループ単位で扱う）
+  const clusterIndexesByRate = new Map();
+  prepared.forEach((it, i) => {
+    if (!clusterIndexesByRate.has(it.rateKey)) clusterIndexesByRate.set(it.rateKey, []);
+    clusterIndexesByRate.get(it.rateKey).push(i);
+  });
+  const clusters = Array.from(clusterIndexesByRate.values()).map(indexes => ({
+    indexes,
+    increment: indexes.reduce((sum, i) => sum + prepared[i].increment, 0),
+    remainder: indexes.reduce((sum, i) => sum + prepared[i].remainder, 0)
+  }));
+
+  const baseTotal = prepared.reduce((sum, it) => sum + it.floorPerPerson * it.people, 0);
+  const target = Number(amount) - baseTotal; // 不足なく集金するために切り上げで埋める必要がある金額
+  const roundUpClusterIndexes = pickMinimalSufficientSubset(clusters, target);
+
+  const roundUpIndexes = new Set();
+  roundUpClusterIndexes.forEach(ci => { clusters[ci].indexes.forEach(i => roundUpIndexes.add(i)); });
+
+  return prepared.map((it, i) => {
+    const perPerson = roundUpIndexes.has(i) ? it.ceilPerPerson : it.floorPerPerson;
+    return { perPerson, total: perPerson * it.people };
+  });
 }
 
-function formatYen(amount) {
-  return `¥${Math.round(Number(amount)).toLocaleString()}`;
-}
+// prepared（各要素にincrement・remainderを持つ配列）の中から、
+// increment の合計が target 以上になる組み合わせのうち、最も余剰が少ない（targetに近い）ものを選ぶ。
+// target未満の組み合わせは集金不足になるため候補から除外する。
+// なお、同じ合計金額を達成できる組み合わせが複数ある場合は、端数（remainder）の合計が最大になる方を選ぶ。
+// 端数がほぼ0の団体（切り上げる理由がほとんどない団体）を、端数が大きい団体（本来切り上げに近い団体）より
+// 優先して切り上げてしまうと、特定の団体だけ不当に多く支払うことになるため。
+// 団体数が少ない場合は総当たりで最適解を、多い場合は貪欲法で近似解を求める。
+function pickMinimalSufficientSubset(prepared, target) {
+  const n = prepared.length;
+  if (n === 0) return new Set();
 
-function discountToRatio(discount) {
-  return 1 - Number(discount) / 100;
-}
+  if (n <= 16) {
+    // 達成可能な合計値ごとに、その合計を達成する組み合わせの中で端数合計が最大のものを保持する
+    let sums = new Map([[0, { mask: 0, remainderSum: 0 }]]); // 達成可能な合計値 -> {選んだ団体のビットマスク, 端数合計}
+    prepared.forEach((it, i) => {
+      const additions = [];
+      sums.forEach((entry, sum) => {
+        const newSum = sum + it.increment;
+        const newRemainderSum = entry.remainderSum + it.remainder;
+        const existing = sums.get(newSum);
+        if (!existing || newRemainderSum > existing.remainderSum) {
+          additions.push([newSum, { mask: entry.mask | (1 << i), remainderSum: newRemainderSum }]);
+        }
+      });
+      additions.forEach(([sum, entry]) => sums.set(sum, entry));
+    });
 
-// 参加グループの負担割合(%)。負担割合 = 100 − 割引率（例：割引率20% → 80%）
-// 旧データ（discount保存）にも対応
-function getGroupBurden(group) {
-  if (group.burden !== undefined && group.burden !== null && group.burden !== "") {
-    return Number(group.burden);
+    // target以上の達成可能な合計の中で最小のものを選ぶ（全員切り上げの合計は必ずtarget以上になるため、必ず見つかる）。
+    // 合計が同額の場合は、端数合計が大きい（＝より切り上げにふさわしい団体を選んでいる）方を優先する。
+    let bestMask = (1 << n) - 1, bestSum = Infinity, bestRemainderSum = -Infinity;
+    sums.forEach((entry, sum) => {
+      if (sum < target - 1e-9) return;
+      const isCloser = sum < bestSum - 1e-9;
+      const isTie = Math.abs(sum - bestSum) < 1e-9 && entry.remainderSum > bestRemainderSum;
+      if (isCloser || isTie) { bestSum = sum; bestMask = entry.mask; bestRemainderSum = entry.remainderSum; }
+    });
+
+    const result = new Set();
+    prepared.forEach((_, i) => { if (bestMask & (1 << i)) result.add(i); });
+    return result;
   }
-  return 100 - Number(group.discount || 0);
-}
 
-function formatBurden(burden) {
-  return `負担割合 ${Number(burden)}%`;
-}
-
-// 端数処理：1人あたりの負担額を指定した桁（unit）で切り上げる
-// 例）unit=100 なら 100円未満を切り上げて100円単位にする
-const ROUNDING_UNIT_OPTIONS = [1, 10, 100, 1000];
-
-function roundUpToUnit(amount, unit) {
-  const safeUnit = Number(unit) > 0 ? Number(unit) : 1;
-  return Math.ceil(Number(amount) / safeUnit) * safeUnit;
-}
-
-function formatDiscount(discount) {
-  discount = Number(discount);
-  if (discount > 0) return `${discount}%引き`;
-  if (discount < 0) return `${Math.abs(discount)}%増し`;
-  return "通常";
+  // 団体数が多いときの近似解：端数（remainder）が大きい＝本来切り上げに近い団体から優先的に切り上げていき、
+  // 集金合計がtargetに達した時点で止めることで、切り上げの根拠が薄い団体を避けつつ余剰も抑える
+  const order = prepared.map((_, i) => i).sort((a, b) => prepared[b].remainder - prepared[a].remainder);
+  const result = new Set();
+  let runningSum = 0;
+  for (const i of order) {
+    if (runningSum >= target - 1e-9) break;
+    result.add(i);
+    runningSum += prepared[i].increment;
+  }
+  return result;
 }
 
 function formatDate(val) {
   if (!val) return "";
-  let date;
-  if (val.toDate && typeof val.toDate === "function") {
-    date = val.toDate();
-  } else {
-    date = new Date(val);
-  }
-  if (isNaN(date.getTime())) return "";
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `(${month}/${day})`;
+  const d = val.toDate ? val.toDate() : new Date(val);
+  return isNaN(d) ? "" : `(${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")})`;
 }
 
 function setupCollapsible(toggleButton, contentEl) {
   const toggleText = toggleButton.querySelector(".collapsible-toggle-text");
-  const openText = toggleText ? toggleText.textContent.trim() : "";
+  const openText = toggleText?.textContent.trim() || "";
   const closeText = openText.replace("を見る", "を閉じる");
-
   toggleButton.addEventListener("click", () => {
     const isOpen = toggleButton.classList.toggle("open");
     contentEl.hidden = !isOpen;
-    if (toggleText) {
-      toggleText.textContent = isOpen ? closeText : openText;
-    }
+    if (toggleText) toggleText.textContent = isOpen ? closeText : openText;
   });
 }
-
 setupCollapsible(detailToggle, detailContent);
 
 function setBurdenBlockLabels(mode) {
-  if (mode === "individual") {
-    burdenBlockTitle.textContent = "支出";
-    burdenBlockDesc.textContent =
-      "参加者をタップすると、内訳（各支払いでの負担額と割引理由・割引率）が開きます。";
-  } else {
-    burdenBlockTitle.textContent = "参加グループごとの支払い内訳";
-    burdenBlockDesc.textContent =
-      "各支払いにおける参加グループごとの配分内訳の一覧です。";
-  }
+  burdenBlockTitle.textContent = mode === "individual" ? "支出" : "グループごとの支払い内訳";
+  burdenBlockDesc.innerHTML = mode === "individual"
+    ? "参加者をタップすると、内訳（各支払いでの負担額と割引理由・割引率）が開きます。"
+    : "支払いをタップすると、グループごとの配分内訳が開きます。<br>負担割合はグループごとに設定した基準（100%が通常負担）、配分割合はその支払いを実際に何%ずつ負担しているかを表します。";
 }
 
-editEventButton.addEventListener("click", event => {
-  event.preventDefault();
-  location.href = `index.html?id=${eventId}`;
-});
+editEventButton.addEventListener("click", e => { e.preventDefault(); location.href = `index.html?id=${eventId}`; });
+addPaymentButton.addEventListener("click", () => { location.href = `${currentMode === "group" ? "grouppayment" : "payment"}.html?id=${eventId}`; });
 
-addPaymentButton.addEventListener("click", () => {
-  if (currentMode === "group") {
-    location.href = `group-payment.html?id=${eventId}`;
-    return;
-  }
-  location.href = `payment.html?id=${eventId}`;
-});
+const linkIconHTML = copyLinkButton.innerHTML;
+const checkIconHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
 
 copyLinkButton.addEventListener("click", async () => {
   try {
-    await navigator.clipboard.writeText(window.location.href);
-    const originalText = copyLinkButton.textContent;
-    copyLinkButton.textContent = "✓";
-    setTimeout(() => {
-      copyLinkButton.textContent = originalText;
-    }, 2000);
-  } catch (error) {
-    console.error(error);
-    alert("リンクのコピーに失敗しました");
-  }
+    await navigator.clipboard.writeText(location.href);
+    copyLinkButton.innerHTML = checkIconHTML;
+    setTimeout(() => copyLinkButton.innerHTML = linkIconHTML, 2000);
+  } catch (e) { console.error(e); alert("リンクのコピーに失敗しました"); }
 });
 
 async function deletePayment(paymentId) {
   if (!eventId) return;
-
-  const eventRef = doc(db, "events", eventId);
-
+  const isIndiv = currentMode === "individual";
+  const key = isIndiv ? "payments" : "groupPayments";
+  const list = isIndiv ? currentPayments : currentGroupPayments;
   try {
-    if (currentMode === "individual") {
-      const updatedPayments = currentPayments.filter(
-        payment => payment.id !== paymentId
-      );
-      await updateDoc(eventRef, { payments: updatedPayments });
-    } else {
-      const updatedGroupPayments = currentGroupPayments.filter(
-        payment => payment.id !== paymentId
-      );
-      await updateDoc(eventRef, { groupPayments: updatedGroupPayments });
-    }
-  } catch (error) {
-    console.error(error);
-    alert("支払いの削除に失敗しました");
-  }
+    await updateDoc(doc(db, "events", eventId), { [key]: list.filter(p => p.id !== paymentId) });
+  } catch (e) { console.error(e); alert("支払いの削除に失敗しました"); }
 }
 
-function getMemberStatuses(member, statuses) {
-  if (!member.statuses || member.statuses.length === 0) return [];
-  return member.statuses
-    .map(statusId => statuses.find(status => status.id === statusId))
-    .filter(Boolean);
-}
-
-function getMemberDiscount(member, statuses) {
-  const memberStatuses = getMemberStatuses(member, statuses);
-  return memberStatuses.reduce((sum, status) => sum + Number(status.discount), 0);
-}
-
-function getMemberStatusNames(member, statuses) {
-  const memberStatuses = getMemberStatuses(member, statuses);
-  if (memberStatuses.length === 0) return "";
-  return memberStatuses.map(status => status.name).join("/");
-}
-
-function getAppliedStatuses(member, statuses, payment) {
-  if (!payment.appliedStatusIds || payment.appliedStatusIds.length === 0) return [];
-  if (!member.statuses || member.statuses.length === 0) return [];
-  return member.statuses
-    .filter(statusId => payment.appliedStatusIds.includes(statusId))
-    .map(statusId => statuses.find(status => status.id === statusId))
-    .filter(Boolean);
-}
+const getMemberStatuses = (m, s) => m.statuses?.map(id => s.find(st => st.id === id)).filter(Boolean) || [];
+const getMemberDiscount = (m, s) => getMemberStatuses(m, s).reduce((sum, st) => sum + Number(st.discount), 0);
+const getMemberStatusNames = (m, s) => getMemberStatuses(m, s).map(st => st.name).join("/");
+const getAppliedStatuses = (m, s, p) => p.appliedStatusIds && m.statuses
+  ? m.statuses.filter(id => p.appliedStatusIds.includes(id)).map(id => s.find(st => st.id === id)).filter(Boolean) : [];
 
 function calculateIndividual(members, statuses, payments) {
   const data = {};
-
-  members.forEach(member => {
-    data[member.id] = {
-      id: member.id,
-      name: member.name,
-      burden: 0,
-      paid: 0,
-      discount: getMemberDiscount(member, statuses),
-      statusNames: getMemberStatusNames(member, statuses)
-    };
+  members.forEach(m => {
+    data[m.id] = { id: m.id, name: m.name, burden: 0, paid: 0, discount: getMemberDiscount(m, statuses), statusNames: getMemberStatusNames(m, statuses) };
   });
-
-  payments.forEach(payment => {
-    if (data[payment.payerId]) {
-      data[payment.payerId].paid += Number(payment.amount);
-    }
-
-    const totalWeight = payment.participants.reduce(
-      (sum, person) => sum + Number(person.weight),
-      0
-    );
-
-    if (totalWeight === 0) return;
-
-    payment.participants.forEach(person => {
-      const share = (Number(payment.amount) * Number(person.weight)) / totalWeight;
-      if (data[person.id]) {
-        data[person.id].burden += share;
-      }
+  payments.forEach(p => {
+    if (data[p.payerId]) data[p.payerId].paid += Number(p.amount);
+    const totalW = p.participants.reduce((sum, person) => sum + Number(person.weight), 0);
+    if (!totalW) return;
+    p.participants.forEach(person => {
+      if (data[person.id]) data[person.id].burden += (Number(p.amount) * Number(person.weight)) / totalW;
     });
   });
-
   return data;
 }
 
 function calculateSettlements(data) {
-  const debtors = [];
-  const creditors = [];
-
-  Object.entries(data).forEach(([id, person]) => {
-    const balance = person.paid - person.burden;
-    if (balance < -1) debtors.push({ id, name: person.name, amount: -balance });
-    if (balance > 1) creditors.push({ id, name: person.name, amount: balance });
+  const debtors = [], creditors = [];
+  Object.entries(data).forEach(([id, p]) => {
+    const bal = p.paid - p.burden;
+    if (bal < -1) debtors.push({ id, name: p.name, amount: -bal });
+    if (bal > 1) creditors.push({ id, name: p.name, amount: bal });
   });
 
   const settlements = [];
-  let i = 0;
-  let j = 0;
-
+  let i = 0, j = 0;
   while (i < debtors.length && j < creditors.length) {
-    const amount = Math.min(debtors[i].amount, creditors[j].amount);
-
-    settlements.push({
-      from: debtors[i].name,
-      to: creditors[j].name,
-      amount
-    });
-
-    debtors[i].amount -= amount;
-    creditors[j].amount -= amount;
-
+    const amt = Math.min(debtors[i].amount, creditors[j].amount);
+    settlements.push({ from: debtors[i].name, to: creditors[j].name, amount: amt });
+    debtors[i].amount -= amt; creditors[j].amount -= amt;
     if (debtors[i].amount < 1) i++;
     if (creditors[j].amount < 1) j++;
   }
-
   return settlements;
 }
 
 function renderIndividualResult(members, statuses, payments) {
-  resultArea.innerHTML = "";
+  if (!members.length) { resultArea.innerHTML = `<p class="empty">参加者がまだいません</p>`; return; }
+  if (!payments.length) { resultArea.innerHTML = `<p class="empty">支払いを追加するとここに精算結果が表示されます</p>`; return; }
 
-  if (members.length === 0) {
-    resultArea.innerHTML = `<p class="empty">参加者がまだいません</p>`;
-    return;
-  }
-
-  if (payments.length === 0) {
-    resultArea.innerHTML = `<p class="empty">支払いを追加するとここに精算結果が表示されます</p>`;
-    return;
-  }
-
-  const data = calculateIndividual(members, statuses, payments);
-  const settlements = calculateSettlements(data);
-
-  const settlementSection = document.createElement("div");
-  settlementSection.className = "settlement-section";
-
-  const settlementTitle = document.createElement("h3");
-  settlementTitle.textContent = "精算方法";
-  settlementSection.appendChild(settlementTitle);
-
-  if (settlements.length === 0) {
-    const complete = document.createElement("div");
-    complete.className = "settlement-complete";
-    complete.textContent = "✓ 全員精算済みです";
-    settlementSection.appendChild(complete);
+  const settlements = calculateSettlements(calculateIndividual(members, statuses, payments));
+  let html = `<div class="settlement-section"><h3>精算方法</h3>`;
+  if (!settlements.length) {
+    html += `<div class="settlement-complete">✓ 全員精算済みです</div>`;
   } else {
-    settlements.forEach(settlement => {
-      const row = document.createElement("div");
-      row.className = "settlement-row";
-      row.innerHTML = `
-        <div class="settlement-flow">
-          <strong>${settlement.from}が</strong>
-          <span class="settlement-arrow">→</span>
-          <strong>${settlement.to}に</strong>
-        </div>
-        <b>${formatYen(settlement.amount)}</b>
-      `;
-      settlementSection.appendChild(row);
+    settlements.forEach(s => {
+      html += `<div class="settlement-row"><div class="settlement-flow"><strong>${s.from}</strong><span class="settlement-arrow">→</span><strong>${s.to}</strong></div><b>${formatYen(s.amount)}</b></div>`;
     });
   }
-
-  resultArea.appendChild(settlementSection);
+  resultArea.innerHTML = html + `</div>`;
 }
 
-function calculateGroup(groups, groupPayments) {
-  const results = {};
+// 1件の支払いについて、対象グループごとの本来の取り分（rawShare）と、
+// 端数処理後の実際の集金額（rounded）をまとめて計算する。
+// renderGroupResult（上部の合計表示）とrenderExpenseDetailGroup（支払いごとの明細）の
+// 両方がこの関数を共通で使うことで、「グループ合計」の数字が画面ごとに食い違わないようにしている。
+// （以前は合計画面が「全支払いの取り分を先に合計してから1回だけ端数処理」、明細画面が
+// 「支払いごとに端数処理してから合計」という別々の計算をしており、端数処理を2回に分けると
+// 損失が重なりやすいため、少人数・低負担割合のグループなどで合計が一致しないことがあった）
+function computeGroupPaymentShares(p, groups, unit) {
+  const targets = p.targetIds?.length ? p.targetIds.map(id => groups.find(g => g.id === id)).filter(Boolean) : groups;
+  const weights = targets.map(g => ({ group: g, weight: Number(g.people) * (getGroupBurdenRate(g) / 100) }));
+  const totalW = weights.reduce((sum, w) => sum + w.weight, 0);
+  const amount = Number(p.amount);
 
-  groups.forEach(group => {
-    results[group.id] = {
-      id: group.id,
-      name: group.name,
-      people: Number(group.people),
-      burden: getGroupBurden(group),
-      total: 0,
-      perPerson: 0
-    };
-  });
+  const shareItems = weights.map(item => ({
+    group: item.group,
+    people: Number(item.group.people),
+    rate: getGroupBurdenRate(item.group),
+    rawShare: totalW > 0 ? (amount * item.weight) / totalW : 0
+  }));
+  // この支払いの集金合計が実際の金額にできるだけ近くなるよう、グループごとに切り上げ・切り捨てを振り分ける
+  const rounded = roundGroupAmounts(shareItems, amount, unit);
 
-  groupPayments.forEach(payment => {
-    const targetGroups =
-      payment.targetIds && payment.targetIds.length > 0
-        ? payment.targetIds.map(id => groups.find(group => group.id === id)).filter(Boolean)
-        : groups;
-
-    const weights = targetGroups.map(group => ({
-      group,
-      weight: Number(group.people) * (getGroupBurden(group) / 100)
-    }));
-
-    const totalWeight = weights.reduce((sum, item) => sum + item.weight, 0);
-
-    if (totalWeight === 0) return;
-
-    weights.forEach(item => {
-      const groupShare = (Number(payment.amount) * item.weight) / totalWeight;
-      if (results[item.group.id]) {
-        results[item.group.id].total += groupShare;
-      }
-    });
-  });
-
-  Object.values(results).forEach(result => {
-    result.perPerson = result.people > 0 ? result.total / result.people : 0;
-  });
-
-  return results;
+  return { targets, shareItems, rounded, amount };
 }
 
 function renderGroupResult(groups, groupPayments, roundingUnit) {
-  resultArea.innerHTML = "";
+  if (!groups.length) { resultArea.innerHTML = `<p class="empty">グループがまだありません</p>`; return; }
+  if (!groupPayments.length) { resultArea.innerHTML = `<p class="empty">支払いを追加するとここに精算結果が表示されます</p>`; return; }
 
-  if (groups.length === 0) {
-    resultArea.innerHTML = `<p class="empty">参加グループがまだありません</p>`;
-    return;
-  }
+  const unit = ROUNDING_UNIT_OPTIONS.includes(Number(roundingUnit)) ? Number(roundingUnit) : 1;
+  const paidTotal = groupPayments.reduce((sum, p) => sum + Number(p.amount), 0);
 
-  if (groupPayments.length === 0) {
-    resultArea.innerHTML = `<p class="empty">支払いを追加するとここに精算結果が表示されます</p>`;
-    return;
-  }
-
-  const currentUnit = ROUNDING_UNIT_OPTIONS.includes(Number(roundingUnit))
-    ? Number(roundingUnit)
-    : 1;
-
-  const results = calculateGroup(groups, groupPayments);
-  const totalAmount = groupPayments.reduce(
-    (sum, payment) => sum + Number(payment.amount),
-    0
-  );
-
-  const summary = document.createElement("div");
-  summary.className = "group-summary";
-  summary.innerHTML = `
-    <span>支払い合計</span>
-    <strong>${formatYen(totalAmount)}</strong>
-  `;
-  resultArea.appendChild(summary);
-
-  const roundingRow = document.createElement("div");
-  roundingRow.className = "group-rounding-row";
-  roundingRow.innerHTML = `
-    <span>1人あたりの端数処理</span>
-    <select id="roundingUnitSelect">
-      ${ROUNDING_UNIT_OPTIONS.map(unit =>
-        `<option value="${unit}" ${unit === currentUnit ? "selected" : ""}>${unit}円単位に切り上げ</option>`
-      ).join("")}
-    </select>
-  `;
-  resultArea.appendChild(roundingRow);
-
-  const roundingUnitSelect = roundingRow.querySelector("#roundingUnitSelect");
-  roundingUnitSelect.addEventListener("change", async () => {
-    const newUnit = Number(roundingUnitSelect.value);
-    try {
-      await updateDoc(doc(db, "events", eventId), { roundingUnit: newUnit });
-    } catch (error) {
-      console.error(error);
-      alert("端数処理の設定の保存に失敗しました");
-    }
+  // 支払いごとに端数処理した金額を積み上げてグループごとの合計を求める（明細の内訳と一致させるため）
+  const totalsByGroupId = {};
+  groups.forEach(g => { totalsByGroupId[g.id] = 0; });
+  groupPayments.forEach(p => {
+    const { shareItems, rounded } = computeGroupPaymentShares(p, groups, unit);
+    shareItems.forEach((item, i) => { totalsByGroupId[item.group.id] += rounded[i].total; });
   });
 
-  Object.values(results).forEach(result => {
-    const roundedPerPerson = roundUpToUnit(result.perPerson, currentUnit);
-    const card = document.createElement("div");
-    card.className = "group-result-card";
-    card.innerHTML = `
-      <div class="group-result-name">${result.name}</div>
-      <div class="group-result-discount">
-        ${result.people}人・${formatBurden(result.burden)}
-      </div>
-      <div class="per-person">
-        <span>1人あたりの負担額</span>
-        <strong>${formatYen(roundedPerPerson)}</strong>
-      </div>
-      <div class="group-total">グループ合計 ${formatYen(result.total)}</div>
-    `;
-    resultArea.appendChild(card);
+  const resultList = groups.map(g => {
+    const people = Number(g.people);
+    const total = totalsByGroupId[g.id] || 0;
+    return { id: g.id, name: g.name, people, burdenRate: getGroupBurdenRate(g), total, perPerson: people > 0 ? total / people : 0 };
+  });
+
+  const collectedTotal = resultList.reduce((sum, r) => sum + r.total, 0);
+  const totalDiff = collectedTotal - paidTotal;
+  const diffLabel = totalDiff > 0 ? `・誤差 +${formatYen(totalDiff)}` : "";
+
+  let html = `
+    <div class="group-summary"><span>支払い合計</span><strong>${formatYen(paidTotal)}</strong></div>
+    <div class="group-summary-sub"><span>集金合計（端数調整後）${diffLabel}</span><strong>${formatYen(collectedTotal)}</strong></div>
+    <div class="group-rounding-row"><span>1人あたりの端数処理</span>
+      <select id="roundingUnitSelect">
+        ${ROUNDING_UNIT_OPTIONS.map(u => `<option value="${u}" ${u === unit ? "selected" : ""}>${u}円単位</option>`).join("")}
+      </select>
+    </div>`;
+
+  resultList.forEach(r => {
+    html += `
+      <div class="group-result-card">
+        <div class="group-result-left">
+          <div class="group-result-name">${r.name}</div>
+          <div class="group-result-discount">${r.people}人・${formatBurdenRate(r.burdenRate)}</div>
+          <div class="group-total">グループ合計 ${formatYen(r.total)}</div>
+        </div>
+        <div class="group-result-amount"><strong>${formatYen(r.perPerson)}</strong></div>
+      </div>`;
+  });
+  resultArea.innerHTML = html;
+
+  resultArea.querySelector("#roundingUnitSelect").addEventListener("change", async e => {
+    try {
+      await updateDoc(doc(db, "events", eventId), { roundingUnit: Number(e.target.value) });
+    } catch (err) { console.error(err); alert("端数処理の設定の保存に失敗しました"); }
   });
 }
 
@@ -450,262 +329,208 @@ function createPaymentCardList(payments, getPayerName, getParticipantsBadges, ed
   const container = document.createElement("div");
   container.className = "payment-card-list";
 
-  payments.forEach(payment => {
+  payments.forEach(p => {
+    const dStr = formatDate(p.createdAt || p.date);
+    const payerLabel = getPayerName(p);
+    const subText = [payerLabel ? `${payerLabel}が立て替え` : "", dStr].filter(Boolean).join(" ");
+    const badges = getParticipantsBadges(p).map((name, i) =>
+      `<span class="participant-badge badge-color-${i % 5}">${name ? name.charAt(0) : "?"}</span>`
+    ).join("");
+
     const card = document.createElement("div");
     card.className = "payment-item-card";
-
-    const payerName = getPayerName(payment);
-    const dateStr = formatDate(payment.createdAt || payment.date);
-    const dateText = dateStr ? ` ${dateStr}` : "";
-    const badges = getParticipantsBadges(payment);
-
-    const badgesHTML = badges.map((name, index) => {
-      const char = name ? name.charAt(0) : "?";
-      const colorIndex = index % 5;
-      return `<span class="participant-badge badge-color-${colorIndex}">${char}</span>`;
-    }).join("");
-
     card.innerHTML = `
       <div class="payment-card-main">
         <div class="payment-card-left">
           <div class="payment-card-header">
-            <span class="payment-card-title">${payment.description || "内容なし"}</span>
+            <span class="payment-card-title">${p.description || "内容なし"}</span>
             <div class="payment-card-actions">
-              <button class="icon-btn edit-btn" data-payment-id="${payment.id}" title="編集">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 20h9"></path>
-                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-                </svg>
+              <button class="icon-btn edit-btn" data-payment-id="${p.id}" title="編集">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
               </button>
-              <button class="icon-btn delete-btn" data-payment-id="${payment.id}" title="削除">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="3 6 5 6 21 6"></polyline>
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                </svg>
+              <button class="icon-btn delete-btn" data-payment-id="${p.id}" title="削除">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
               </button>
             </div>
           </div>
-          <div class="payment-card-sub">
-            ${payerName}が立て替え${dateText}
-          </div>
-          <div class="payment-card-badges">
-            ${badgesHTML}
-          </div>
+          ${subText ? `<div class="payment-card-sub">${subText}</div>` : ""}
+          <div class="payment-card-badges">${badges}</div>
         </div>
-        <div class="payment-card-right">
-          <span class="payment-card-amount">${formatYen(payment.amount)}</span>
-        </div>
-      </div>
-    `;
-
+        <div class="payment-card-right"><span class="payment-card-amount">${formatYen(p.amount)}</span></div>
+      </div>`;
     container.appendChild(card);
   });
 
   container.querySelectorAll(".edit-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const id = btn.dataset.paymentId;
-      location.href = `${editPage}?id=${eventId}&paymentId=${id}`;
-    });
+    btn.addEventListener("click", () => location.href = `${editPage}?id=${eventId}&paymentId=${btn.dataset.paymentId}`);
   });
-
   container.querySelectorAll(".delete-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
-      const id = btn.dataset.paymentId;
-      if (confirm("この支払いを削除してもよろしいですか？")) {
-        await deletePayment(id);
-      }
+      if (confirm("この支払いを削除してもよろしいですか？")) await deletePayment(btn.dataset.paymentId);
     });
   });
-
   return container;
 }
 
-// ========================================
-// 支払い一覧
-// 新しい順に並べ、直近6件のみ表示。
-// 残りは「過去の支払いを見る」で折りたたみ表示する。
-// ========================================
-
 function renderPaymentListWithCollapse(payments, getPayerName, getParticipantsBadges, editPage, container) {
   container.innerHTML = "";
+  if (!payments.length) { container.innerHTML = `<p class="empty">支払いはまだありません</p>`; return; }
 
-  if (payments.length === 0) {
-    container.innerHTML = `<p class="empty">支払いはまだありません</p>`;
-    return;
-  }
+  const sorted = [...payments].reverse();
+  const olderCount = Math.max(sorted.length - PAYMENT_LIST_VISIBLE_COUNT, 0);
 
-  // 保存順（古い順）を新しい順に並び替える
-  const sortedPayments = [...payments].reverse();
+  // 全件を1つの連続したリストとして生成する（直近6件用・過去分用でリストを分けると、
+  // それぞれの末尾のカードから区切り線が消えてしまい、6件目と7件目の間の線が消える原因になるため）
+  const listEl = createPaymentCardList(sorted, getPayerName, getParticipantsBadges, editPage);
+  const olderCards = Array.from(listEl.children).slice(PAYMENT_LIST_VISIBLE_COUNT);
+  olderCards.forEach(card => { card.hidden = !paymentListExpanded; });
+  container.appendChild(listEl);
 
-  const recentPayments = sortedPayments.slice(0, PAYMENT_LIST_VISIBLE_COUNT);
-  const olderPayments = sortedPayments.slice(PAYMENT_LIST_VISIBLE_COUNT);
+  if (!olderCount) return;
 
-  const recentList = createPaymentCardList(recentPayments, getPayerName, getParticipantsBadges, editPage);
-  container.appendChild(recentList);
+  const openText = `過去の支払い${olderCount}件を見る`, closeText = "閉じる";
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = `payment-list-more-button${paymentListExpanded ? " open" : ""}`;
+  btn.innerHTML = `<span class="payment-list-more-text">${paymentListExpanded ? closeText : openText}</span><span class="payment-list-more-icon">▼</span>`;
+  // ボタンは常にリストの末尾に置く。閉じているときは過去分の高さが0になるため、結果的に直近6件の直後に表示される
+  container.appendChild(btn);
 
-  if (olderPayments.length === 0) return;
-
-  const openText = `過去の支払い${olderPayments.length}件を見る`;
-  const closeText = "閉じる";
-
-  const moreButton = document.createElement("button");
-  moreButton.type = "button";
-  moreButton.className = "payment-list-more-button";
-  if (paymentListExpanded) moreButton.classList.add("open");
-  moreButton.innerHTML = `
-    <span class="payment-list-more-text">${paymentListExpanded ? closeText : openText}</span>
-    <span class="payment-list-more-icon">▼</span>
-  `;
-  container.appendChild(moreButton);
-
-  const olderContainer = document.createElement("div");
-  olderContainer.hidden = !paymentListExpanded;
-  const olderList = createPaymentCardList(olderPayments, getPayerName, getParticipantsBadges, editPage);
-  olderContainer.appendChild(olderList);
-  container.appendChild(olderContainer);
-
-  const moreText = moreButton.querySelector(".payment-list-more-text");
-
-  moreButton.addEventListener("click", () => {
+  btn.addEventListener("click", () => {
     paymentListExpanded = !paymentListExpanded;
-    moreButton.classList.toggle("open", paymentListExpanded);
-    olderContainer.hidden = !paymentListExpanded;
-    moreText.textContent = paymentListExpanded ? closeText : openText;
-  });
-}
-
-function renderIndividualPaymentSummary(payments, members, container) {
-  const getPayerName = payment =>
-    payment.payerName ||
-    members.find(m => m.id === payment.payerId)?.name ||
-    "未設定";
-
-  const getParticipantsBadges = payment => {
-    if (!payment.participants) return [];
-    return payment.participants.map(p => {
-      const m = members.find(mem => mem.id === p.id);
-      return m ? m.name : (p.name || "");
-    }).filter(Boolean);
-  };
-
-  renderPaymentListWithCollapse(payments, getPayerName, getParticipantsBadges, "payment.html", container);
-}
-
-function renderGroupPaymentSummary(payments, groups, container) {
-  const getPayerName = payment => payment.payerName || "未設定";
-
-  const getParticipantsBadges = payment => {
-    if (!payment.targetIds || payment.targetIds.length === 0) {
-      return groups.map(g => g.name);
+    btn.classList.toggle("open", paymentListExpanded);
+    olderCards.forEach(card => { card.hidden = !paymentListExpanded; });
+    btn.querySelector(".payment-list-more-text").textContent = paymentListExpanded ? closeText : openText;
+    if (!paymentListExpanded) {
+      // 閉じると表示位置がボタンより下にずれてしまうため、ボタンが見える位置までスクロールする
+      btn.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-    return payment.targetIds.map(id => {
-      const g = groups.find(group => group.id === id);
-      return g ? g.name : "";
-    }).filter(Boolean);
-  };
-
-  renderPaymentListWithCollapse(payments, getPayerName, getParticipantsBadges, "group-payment.html", container);
+  });
 }
 
 function renderIndividualPayments(payments, members) {
-  renderIndividualPaymentSummary(payments, members, paymentManagementList);
+  renderPaymentListWithCollapse(payments,
+    p => p.payerName || members.find(m => m.id === p.payerId)?.name || "未設定",
+    p => p.participants?.map(pt => members.find(m => m.id === pt.id)?.name || pt.name || "").filter(Boolean) || [],
+    "payment.html", paymentManagementList
+  );
 }
 
 function renderGroupPayments(groupPayments, groups) {
-  renderGroupPaymentSummary(groupPayments, groups, paymentManagementList);
+  // 団体モードの支払いに「支払った人」の概念はないため、過去のデータにpayerNameが残っていても表示しない
+  renderPaymentListWithCollapse(groupPayments,
+    () => "",
+    p => !p.targetIds?.length ? groups.map(g => g.name) : p.targetIds.map(id => groups.find(g => g.id === id)?.name || "").filter(Boolean),
+    "grouppayment.html", paymentManagementList
+  );
 }
-
-// ========================================
-// 支出の明細（個人モード）
-// ========================================
 
 function getPaymentStatusText(member, statuses, payment, participant) {
-  const appliedStatuses = member ? getAppliedStatuses(member, statuses, payment) : [];
-
-  let statusDiscount = 0;
-  appliedStatuses.forEach(status => {
-    statusDiscount += Number(status.discount);
-  });
-
-  const individualDiscount =
-    participant && participant.individualDiscount
-      ? Number(participant.individualDiscount)
-      : 0;
+  const applied = member ? getAppliedStatuses(member, statuses, payment) : [];
+  const statusDiscount = applied.reduce((sum, st) => sum + Number(st.discount), 0);
+  const indivDiscount = Number(participant?.individualDiscount || 0);
 
   const labels = [];
-  if (appliedStatuses.length > 0) {
-    labels.push(appliedStatuses.map(status => status.name).join("/"));
-  }
-  if (individualDiscount !== 0) {
-    labels.push("個別調整");
-  }
-
-  if (labels.length === 0) return "通常";
-
-  const totalDiscount = statusDiscount + individualDiscount;
-  return `${labels.join("/")}・${formatDiscount(totalDiscount)}`;
+  if (applied.length) labels.push(applied.map(st => st.name).join("/"));
+  if (indivDiscount !== 0) labels.push("個別割引");
+  return labels.length ? `${labels.join("/")}・${formatDiscount(statusDiscount + indivDiscount)}` : "通常";
 }
 
-function makeAccordionToggle(memberCard, rowsContainer) {
-  return () => {
-    const isOpen = memberCard.classList.toggle("open");
-    rowsContainer.hidden = !isOpen;
+function attachAccordionEvents(header, card, rows) {
+  const toggle = () => {
+    const isOpen = card.classList.toggle("open");
+    rows.hidden = !isOpen;
   };
-}
-
-function attachAccordionEvents(header, toggleAccordion) {
-  header.addEventListener("click", toggleAccordion);
-  header.addEventListener("keydown", event => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      toggleAccordion();
-    }
-  });
+  header.addEventListener("click", toggle);
+  header.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
 }
 
 function renderBurdenDetailIndividual(payments, members, statuses) {
   burdenDetailList.innerHTML = "";
-
-  if (payments.length === 0) {
-    burdenDetailList.innerHTML = `<p class="empty">支払いはまだありません</p>`;
-    return;
-  }
+  if (!payments.length) { burdenDetailList.innerHTML = `<p class="empty">支払いはまだありません</p>`; return; }
 
   let hasAnyRow = false;
-
-  members.forEach(member => {
-    const relatedPayments = [];
+  members.forEach(m => {
+    const related = [];
     let totalBurden = 0;
 
-    payments.forEach(payment => {
-      const participant = payment.participants?.find(
-        person => person.id === member.id
-      );
-
-      if (!participant) return;
-
-      const totalWeight = (payment.participants || []).reduce(
-        (sum, person) => sum + Number(person.weight),
-        0
-      );
-
-      const share =
-        totalWeight > 0
-          ? (Number(payment.amount) * Number(participant.weight)) / totalWeight
-          : 0;
-
+    payments.forEach(p => {
+      const pt = p.participants?.find(person => person.id === m.id);
+      if (!pt) return;
+      const totalW = (p.participants || []).reduce((sum, person) => sum + Number(person.weight), 0);
+      const share = totalW > 0 ? (Number(p.amount) * Number(pt.weight)) / totalW : 0;
       totalBurden += share;
-      relatedPayments.push({ payment, participant, share });
+      related.push({ payment: p, participant: pt, share });
     });
 
-    if (relatedPayments.length === 0) return;
-
+    if (!related.length) return;
     hasAnyRow = true;
 
-    const statusText = getMemberStatusNames(member, statuses) || "通常";
+    const card = document.createElement("div");
+    card.className = "member-payment-card";
+    const header = document.createElement("div");
+    header.className = "member-payment-header accordion-header";
+    header.setAttribute("role", "button"); header.setAttribute("tabindex", "0");
+    header.innerHTML = `<div><strong>${m.name}</strong><span>${related.length}件の支払い・${getMemberStatusNames(m, statuses) || "通常"}</span></div><div class="accordion-header-right"><b>${formatYen(totalBurden)}</b><span class="accordion-caret">▼</span></div>`;
 
-    const memberCard = document.createElement("div");
-    memberCard.className = "member-payment-card";
+    const rows = document.createElement("div");
+    rows.className = "accordion-rows"; rows.hidden = true;
+
+    related.forEach(item => {
+      const p = item.payment;
+      const payerName = p.payerName || members.find(mem => mem.id === p.payerId)?.name || "未設定";
+      const dStr = formatDate(p.createdAt || p.date);
+
+      const row = document.createElement("div");
+      row.className = "member-payment-row";
+      row.innerHTML = `<div class="member-payment-info"><strong>${p.description || "内容なし"}</strong><span>${payerName}が立て替え${dStr ? ` ${dStr}` : ""}</span><small>${getPaymentStatusText(m, statuses, p, item.participant)}</small></div><div class="member-payment-right"><b>${formatYen(item.share)}</b></div>`;
+      rows.appendChild(row);
+    });
+
+    card.appendChild(header); card.appendChild(rows);
+    attachAccordionEvents(header, card, rows);
+    burdenDetailList.appendChild(card);
+  });
+
+  if (!hasAnyRow) burdenDetailList.innerHTML = `<p class="empty">支払いはまだありません</p>`;
+}
+
+function renderExpenseDetailGroup(groupPayments, groups, roundingUnit) {
+  burdenDetailList.innerHTML = "";
+  if (!groupPayments.length) { burdenDetailList.innerHTML = `<p class="empty">支払いはまだありません</p>`; return; }
+
+  const unit = ROUNDING_UNIT_OPTIONS.includes(Number(roundingUnit)) ? Number(roundingUnit) : 1;
+
+  groupPayments.forEach(p => {
+    const { targets, shareItems, rounded, amount } = computeGroupPaymentShares(p, groups, unit);
+
+    let detailsHTML = "";
+    let collectedTotal = 0;
+    shareItems.forEach((item, i) => {
+      const g = item.group;
+      const sharePercent = amount > 0 ? Math.round((item.rawShare / amount) * 100) : 0;
+      const { perPerson, total: share } = rounded[i];
+      collectedTotal += share;
+      detailsHTML += `
+        <div class="payment-group-detail">
+          <div class="payment-group-name">
+            <strong>${g.name}</strong>
+            <span>${g.people}人・${formatBurdenRate(getGroupBurdenRate(g))}・配分割合 ${sharePercent}%</span>
+          </div>
+          <div class="payment-group-amount">
+            <strong>1人 ${formatYen(perPerson)}</strong>
+            <span>グループ合計 ${formatYen(share)}</span>
+          </div>
+        </div>`;
+    });
+
+    const dStr = formatDate(p.createdAt || p.date);
+    const roundingDiff = collectedTotal - amount;
+    // 団体モードの支払いに「支払った人」の概念はないため、過去のデータにpayerNameが残っていても表示しない
+    const subText = [dStr, `${targets.length}グループで分担`].filter(Boolean).join("・");
+
+    const card = document.createElement("div");
+    card.className = "member-payment-card";
 
     const header = document.createElement("div");
     header.className = "member-payment-header accordion-header";
@@ -713,365 +538,153 @@ function renderBurdenDetailIndividual(payments, members, statuses) {
     header.setAttribute("tabindex", "0");
     header.innerHTML = `
       <div>
-        <strong>${member.name}</strong>
-        <span>${relatedPayments.length}件の支払い・${statusText}</span>
+        <strong>${p.description || "内容なし"}</strong>
+        <span>${subText}</span>
       </div>
       <div class="accordion-header-right">
-        <b>${formatYen(totalBurden)}</b>
+        <b>${formatYen(amount)}</b>
         <span class="accordion-caret">▼</span>
-      </div>
-    `;
-    memberCard.appendChild(header);
+      </div>`;
 
-    const rowsContainer = document.createElement("div");
-    rowsContainer.className = "accordion-rows";
-    rowsContainer.hidden = true;
-
-    relatedPayments.forEach(itemData => {
-      const payment = itemData.payment;
-      const statusText = getPaymentStatusText(member, statuses, payment, itemData.participant);
-      const payerName =
-        payment.payerName ||
-        members.find(m => m.id === payment.payerId)?.name ||
-        "未設定";
-      const dateStr = formatDate(payment.createdAt || payment.date);
-      const dateText = dateStr ? ` ${dateStr}` : "";
-
-      const row = document.createElement("div");
-      row.className = "member-payment-row";
-      row.innerHTML = `
-        <div class="member-payment-info">
-          <strong>${payment.description || "内容なし"}</strong>
-          <span>${payerName}が立て替え${dateText}</span>
-          <small>${statusText}</small>
+    const rows = document.createElement("div");
+    rows.className = "accordion-rows";
+    rows.hidden = true;
+    rows.innerHTML = `
+      <div class="expense-accordion-body">
+        <div class="payment-detail-header">グループごとの負担</div>
+        <div class="payment-detail-list">${detailsHTML}</div>
+        <div class="payment-collected-total">
+          <span>集金合計${roundingDiff > 0 ? `（端数調整で +${formatYen(roundingDiff)}）` : ""}</span>
+          <strong>${formatYen(collectedTotal)}</strong>
         </div>
-        <div class="member-payment-right">
-          <b>${formatYen(itemData.share)}</b>
-        </div>
-      `;
-      rowsContainer.appendChild(row);
-    });
+      </div>`;
 
-    memberCard.appendChild(rowsContainer);
-    attachAccordionEvents(header, makeAccordionToggle(memberCard, rowsContainer));
-
-    burdenDetailList.appendChild(memberCard);
-  });
-
-  if (!hasAnyRow) {
-    burdenDetailList.innerHTML = `<p class="empty">支払いはまだありません</p>`;
-  }
-}
-
-// ========================================
-// 支出の明細（団体モード）
-// ========================================
-
-function renderExpenseDetailGroup(groupPayments, groups) {
-  burdenDetailList.innerHTML = "";
-
-  if (groupPayments.length === 0) {
-    burdenDetailList.innerHTML = `<p class="empty">支払いはまだありません</p>`;
-    return;
-  }
-
-  groupPayments.forEach(payment => {
-    const item = document.createElement("div");
-    item.className = "payment-history-item";
-
-    const targetGroups =
-      payment.targetIds && payment.targetIds.length > 0
-        ? payment.targetIds.map(id => groups.find(group => group.id === id)).filter(Boolean)
-        : groups;
-
-    const weights = targetGroups.map(group => ({
-      group,
-      weight: Number(group.people) * (getGroupBurden(group) / 100)
-    }));
-
-    const totalWeight = weights.reduce((sum, w) => sum + w.weight, 0);
-    let detailsHTML = "";
-
-    weights.forEach(itemData => {
-      const group = itemData.group;
-      const groupShare =
-        totalWeight > 0
-          ? (Number(payment.amount) * itemData.weight) / totalWeight
-          : 0;
-
-      const perPerson =
-        Number(group.people) > 0 ? groupShare / Number(group.people) : 0;
-
-      detailsHTML += `
-        <div class="payment-group-detail">
-          <div class="payment-group-name">
-            <strong>${group.name}</strong>
-            <span>${group.people}人・${formatBurden(getGroupBurden(group))}</span>
-          </div>
-          <div class="payment-group-amount">
-            <strong>${formatYen(groupShare)}</strong>
-            <span>1人あたり ${formatYen(perPerson)}</span>
-          </div>
-        </div>
-      `;
-    });
-
-    item.innerHTML = `
-      <div class="payment-history-main">
-        <div>
-          <strong>${payment.description || "内容なし"}</strong>
-          <span class="payment-payer">建て替え：${payment.payerName || "未設定"}</span>
-        </div>
-        <span class="payment-amount">${formatYen(payment.amount)}</span>
-      </div>
-      <div class="payment-detail-header">参加グループごとの負担</div>
-      <div class="payment-detail-list">${detailsHTML}</div>
-    `;
-
-    burdenDetailList.appendChild(item);
+    card.appendChild(header);
+    card.appendChild(rows);
+    attachAccordionEvents(header, card, rows);
+    burdenDetailList.appendChild(card);
   });
 }
-
-// ========================================
-// 貸し借りの明細（個人モードのみ）
-// 精算方法（最小送金）とは別に、
-// 実際に発生している貸し借りの関係をそのまま表示する
-// ========================================
 
 function calculatePaymentDebts(payments, members, statuses) {
   const relations = [];
-
-  payments.forEach(payment => {
-    const payerId = payment.payerId;
+  payments.forEach(p => {
+    const payerId = p.payerId;
     if (!payerId) return;
+    const payerName = p.payerName || members.find(m => m.id === payerId)?.name || "未設定";
+    const totalW = (p.participants || []).reduce((sum, person) => sum + Number(person.weight), 0);
+    if (!totalW) return;
 
-    const payerName =
-      payment.payerName ||
-      members.find(m => m.id === payerId)?.name ||
-      "未設定";
-
-    const totalWeight = (payment.participants || []).reduce(
-      (sum, person) => sum + Number(person.weight),
-      0
-    );
-
-    if (totalWeight === 0) return;
-
-    (payment.participants || []).forEach(participant => {
-      if (participant.id === payerId) return;
-
-      const share = (Number(payment.amount) * Number(participant.weight)) / totalWeight;
+    (p.participants || []).forEach(pt => {
+      if (pt.id === payerId) return;
+      const share = (Number(p.amount) * Number(pt.weight)) / totalW;
       if (share <= 0) return;
-
-      const member = members.find(m => m.id === participant.id);
-      const participantName = member ? member.name : (participant.name || "未設定");
-      const statusText = getPaymentStatusText(member, statuses, payment, participant);
-      const dateStr = formatDate(payment.createdAt || payment.date);
+      const m = members.find(mem => mem.id === pt.id);
 
       relations.push({
-        payment,
-        description: payment.description || "内容なし",
-        dateText: dateStr ? ` ${dateStr}` : "",
-        payerId,
-        payerName,
-        participantId: participant.id,
-        participantName,
-        amount: share,
-        statusText
+        payment: p, description: p.description || "内容なし", dateText: formatDate(p.createdAt || p.date) ? ` ${formatDate(p.createdAt || p.date)}` : "",
+        payerId, payerName, participantId: pt.id, participantName: m ? m.name : (pt.name || "未設定"),
+        amount: share, statusText: getPaymentStatusText(m, statuses, p, pt)
       });
     });
   });
-
   return relations;
 }
 
 function renderDebtDetailIndividual(payments, members, statuses) {
   debtDetailList.innerHTML = "";
-
-  if (payments.length === 0) {
-    debtDetailList.innerHTML = `<p class="empty">貸し借りはまだありません</p>`;
-    return;
-  }
+  if (!payments.length) { debtDetailList.innerHTML = `<p class="empty">貸し借りはまだありません</p>`; return; }
 
   const relations = calculatePaymentDebts(payments, members, statuses);
-
-  if (relations.length === 0) {
-    debtDetailList.innerHTML = `<p class="empty">貸し借りはありません</p>`;
-    return;
-  }
+  if (!relations.length) { debtDetailList.innerHTML = `<p class="empty">貸し借りはありません</p>`; return; }
 
   let hasAnyRow = false;
+  members.forEach(m => {
+    const payRows = relations.filter(r => r.participantId === m.id);
+    const receiveRows = relations.filter(r => r.payerId === m.id && r.participantId !== m.id);
 
-  members.forEach(member => {
-    // この人が支払うべき分（自分が参加者で、支払者ではない支払い）
-    const payRows = relations.filter(r => r.participantId === member.id);
-
-    // この人が受け取るべき分（自分が支払者で、他の参加者がいる支払い）
-    const receiveRows = relations.filter(
-      r => r.payerId === member.id && r.participantId !== member.id
-    );
-
-    if (payRows.length === 0 && receiveRows.length === 0) return;
-
+    if (!payRows.length && !receiveRows.length) return;
     hasAnyRow = true;
 
-    const totalPay = payRows.reduce((sum, r) => sum + r.amount, 0);
-    const totalReceive = receiveRows.reduce((sum, r) => sum + r.amount, 0);
-    const net = totalReceive - totalPay;
-
-    // 同じ支払い（同じ項目）から複数人分を受け取る場合は、
-    // 人物ごとに列挙せず「○人から受け取り」として合算する
-    const receiveGroups = [];
-    const receiveGroupMap = new Map();
+    const net = receiveRows.reduce((sum, r) => sum + r.amount, 0) - payRows.reduce((sum, r) => sum + r.amount, 0);
+    const receiveGroups = [], receiveMap = new Map();
 
     receiveRows.forEach(r => {
-      const key = r.payment.id;
-      let group = receiveGroupMap.get(key);
-      if (!group) {
-        group = {
-          description: r.description,
-          dateText: r.dateText,
-          amount: 0,
-          count: 0,
-          participantName: r.participantName,
-          statusText: r.statusText
-        };
-        receiveGroupMap.set(key, group);
-        receiveGroups.push(group);
+      let g = receiveMap.get(r.payment.id);
+      if (!g) {
+        g = { description: r.description, dateText: r.dateText, amount: 0, count: 0, participantName: r.participantName, statusText: r.statusText };
+        receiveMap.set(r.payment.id, g); receiveGroups.push(g);
       }
-      group.amount += r.amount;
-      group.count += 1;
+      g.amount += r.amount; g.count += 1;
     });
 
-    const memberCard = document.createElement("div");
-    memberCard.className = "member-payment-card";
-
+    const card = document.createElement("div");
+    card.className = "member-payment-card";
     const header = document.createElement("div");
     header.className = "member-payment-header accordion-header";
-    header.setAttribute("role", "button");
-    header.setAttribute("tabindex", "0");
+    header.setAttribute("role", "button"); header.setAttribute("tabindex", "0");
     const netLabel = net > 0 ? "受け取り" : net < 0 ? "支払い" : "差引なし";
-    const netColorClass =
-      net > 0 ? "debt-amount-receive" : net < 0 ? "debt-amount-pay" : "";
-    header.innerHTML = `
-      <div>
-        <strong>${member.name}</strong>
-        <span>${receiveGroups.length + payRows.length}件の貸し借り</span>
-      </div>
-      <div class="accordion-header-right">
-        <b class="${netColorClass}">${netLabel} ${formatYen(Math.abs(net))}</b>
-        <span class="accordion-caret">▼</span>
-      </div>
-    `;
-    memberCard.appendChild(header);
+    const netColor = net > 0 ? "debt-amount-receive" : net < 0 ? "debt-amount-pay" : "";
+    header.innerHTML = `<div><strong>${m.name}</strong><span>${receiveGroups.length + payRows.length}件の貸し借り</span></div><div class="accordion-header-right"><b class="${netColor}">${netLabel} ${formatYen(Math.abs(net))}</b><span class="accordion-caret">▼</span></div>`;
 
-    const rowsContainer = document.createElement("div");
-    rowsContainer.className = "accordion-rows";
-    rowsContainer.hidden = true;
+    const rows = document.createElement("div");
+    rows.className = "accordion-rows"; rows.hidden = true;
 
-    receiveGroups.forEach(group => {
+    receiveGroups.forEach(g => {
       const row = document.createElement("div");
       row.className = "member-payment-row";
-      const subText =
-        group.count > 1
-          ? `${group.count}人から受け取り${group.dateText}`
-          : `${group.participantName}から受け取り${group.dateText}`;
-      const statusHTML =
-        group.count > 1 ? "" : `<small>${group.statusText}</small>`;
-      row.innerHTML = `
-        <div class="member-payment-info">
-          <strong>${group.description}</strong>
-          <span>${subText}</span>
-          ${statusHTML}
-        </div>
-        <div class="member-payment-right">
-          <b class="debt-amount-receive">+${formatYen(group.amount)}</b>
-        </div>
-      `;
-      rowsContainer.appendChild(row);
+      const sub = g.count > 1 ? `${g.count}人から受け取り${g.dateText}` : `${g.participantName}から受け取り${g.dateText}`;
+      row.innerHTML = `<div class="member-payment-info"><strong>${g.description}</strong><span>${sub}</span>${g.count > 1 ? "" : `<small>${g.statusText}</small>`}</div><div class="member-payment-right"><b class="debt-amount-receive">+${formatYen(g.amount)}</b></div>`;
+      rows.appendChild(row);
     });
 
     payRows.forEach(r => {
       const row = document.createElement("div");
       row.className = "member-payment-row";
-      row.innerHTML = `
-        <div class="member-payment-info">
-          <strong>${r.description}</strong>
-          <span>${r.payerName}に支払い${r.dateText}</span>
-          <small>${r.statusText}</small>
-        </div>
-        <div class="member-payment-right">
-          <b class="debt-amount-pay">-${formatYen(r.amount)}</b>
-        </div>
-      `;
-      rowsContainer.appendChild(row);
+      row.innerHTML = `<div class="member-payment-info"><strong>${r.description}</strong><span>${r.payerName}に支払い${r.dateText}</span><small>${r.statusText}</small></div><div class="member-payment-right"><b class="debt-amount-pay">-${formatYen(r.amount)}</b></div>`;
+      rows.appendChild(row);
     });
 
-    memberCard.appendChild(rowsContainer);
-    attachAccordionEvents(header, makeAccordionToggle(memberCard, rowsContainer));
-
-    debtDetailList.appendChild(memberCard);
+    card.appendChild(header); card.appendChild(rows);
+    attachAccordionEvents(header, card, rows);
+    debtDetailList.appendChild(card);
   });
 
-  if (!hasAnyRow) {
-    debtDetailList.innerHTML = `<p class="empty">貸し借りはありません</p>`;
-  }
+  if (!hasAnyRow) debtDetailList.innerHTML = `<p class="empty">貸し借りはありません</p>`;
 }
 
 function loadEvent() {
   if (!eventId) return;
+  onSnapshot(doc(db, "events", eventId), snapshot => {
+    if (!snapshot.exists()) { alert("イベントが見つかりません"); location.href = "index.html"; return; }
 
-  const eventRef = doc(db, "events", eventId);
+    const data = snapshot.data();
+    const eventName = data.name || "名称未設定";
+    currentMode = data.mode || "individual";
+    currentPayments = data.payments || [];
+    currentGroupPayments = data.groupPayments || [];
 
-  onSnapshot(
-    eventRef,
-    snapshot => {
-      if (!snapshot.exists()) {
-        alert("イベントが見つかりません");
-        location.href = "index.html";
-        return;
-      }
+    eventTitle.textContent = eventName;
+    document.title = `${eventName} | 清算くん`;
+    setBurdenBlockLabels(currentMode);
 
-      const data = snapshot.data();
-      const eventName = data.name || "名称未設定";
-      const mode = data.mode || "individual";
-
-      currentMode = mode;
-      currentPayments = data.payments || [];
-      currentGroupPayments = data.groupPayments || [];
-
-      const statuses = data.statuses || [];
-      const members = data.members || [];
-      const groups = data.groups || [];
-
-      eventTitle.textContent = eventName;
-      document.title = `${eventName} | 清算くん`;
-
-      setBurdenBlockLabels(mode);
-
-      if (mode === "individual") {
-        renderIndividualResult(members, statuses, currentPayments);
-        renderIndividualPayments(currentPayments, members);
-        renderBurdenDetailIndividual(currentPayments, members, statuses);
-        renderDebtDetailIndividual(currentPayments, members, statuses);
-
-        debtDetailBlock.hidden = false;
-      } else {
-        const roundingUnit = data.roundingUnit || 1;
-        renderGroupResult(groups, currentGroupPayments, roundingUnit);
-        renderGroupPayments(currentGroupPayments, groups);
-        renderExpenseDetailGroup(currentGroupPayments, groups);
-
-        debtDetailList.innerHTML =
-          `<p class="empty">団体モードでは貸し借りの明細はありません</p>`;
-        debtDetailBlock.hidden = true;
-      }
-    },
-    error => {
-      console.error(error);
-      resultArea.innerHTML = `<p class="empty">データの読み込みに失敗しました</p>`;
+    if (currentMode === "individual") {
+      renderIndividualResult(data.members || [], data.statuses || [], currentPayments);
+      renderIndividualPayments(currentPayments, data.members || []);
+      renderBurdenDetailIndividual(currentPayments, data.members || [], data.statuses || []);
+      renderDebtDetailIndividual(currentPayments, data.members || [], data.statuses || []);
+      debtDetailBlock.hidden = false;
+    } else {
+      renderGroupResult(data.groups || [], currentGroupPayments, data.roundingUnit || 1);
+      renderGroupPayments(currentGroupPayments, data.groups || []);
+      renderExpenseDetailGroup(currentGroupPayments, data.groups || [], data.roundingUnit || 1);
+      debtDetailList.innerHTML = `<p class="empty">団体モードでは貸し借りの明細はありません</p>`;
+      debtDetailBlock.hidden = true;
     }
-  );
+  }, err => {
+    console.error(err);
+    resultArea.innerHTML = `<p class="empty">データの読み込みに失敗しました</p>`;
+  });
 }
 
 loadEvent();

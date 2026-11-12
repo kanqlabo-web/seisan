@@ -1,0 +1,55 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // events/{eventId} ドキュメントの形が、アプリが実際に書き込む内容と一致しているかを確認する。
+    // トップレベルのフィールド名・型・大まかな上限だけをチェックし、
+    // 各配列の中身（支払いの1件ごとの項目など）までは細かく検証しない。
+    // 理由：アプリは今後も項目を追加・変更していく可能性が高く、
+    // 配列の中身まで厳密に固定してしまうと、アプリ側の仕様変更のたびに
+    // ルールも合わせて直さないと書き込みがエラーになってしまうため。
+    //
+    // name以外の各フィールドは「存在しなくてもよいが、存在するなら型・上限を満たす」形にしている。
+    // 理由：updateDoc()は送った差分と既存データをマージした結果のドキュメント全体に対して
+    // 評価されるが、機能追加より前に作られたイベントは groupPayments や roundingUnit などの
+    // フィールド自体を持っていないことがある。アプリのコード側も
+    // data.groupPayments || [] のようにフィールドが無い前提で読み込む作りになっているため、
+    // ルール側もそれに合わせて存在必須にしない（存在必須にすると、そうした既存イベントの
+    // 保存が軒並みエラーになってしまう）。
+    function isValidEvent(data) {
+      return data.keys().hasOnly(['name', 'mode', 'statuses', 'members', 'groups', 'payments', 'groupPayments', 'roundingUnit'])
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 200
+        && (!('mode' in data) || data.mode in ['individual', 'group'])
+        && (!('statuses' in data) || (data.statuses is list && data.statuses.size() <= 300))
+        && (!('members' in data) || (data.members is list && data.members.size() <= 500))
+        && (!('groups' in data) || (data.groups is list && data.groups.size() <= 500))
+        && (!('payments' in data) || (data.payments is list && data.payments.size() <= 3000))
+        && (!('groupPayments' in data) || (data.groupPayments is list && data.groupPayments.size() <= 3000))
+        && (!('roundingUnit' in data) || data.roundingUnit is number);
+    }
+
+    match /events/{eventId} {
+      // 1件ずつのドキュメント取得（URL中のIDを知っている人がイベントを開く）は許可する。
+      allow get: if true;
+
+      // コレクション全体の一覧取得（list）は許可しない。
+      // ログイン機能がないこのアプリでは「イベントIDを知っていること」が
+      // 実質的なアクセス権になっているため、一覧取得を許すと
+      // 誰でも他人の割り勘データを総なめできてしまう。
+      // アプリ側も一覧取得（collection/getDocs）は使っていないため、通常利用には影響しない。
+      allow list: if false;
+
+      allow create: if isValidEvent(request.resource.data);
+      allow update: if isValidEvent(request.resource.data);
+
+      // アプリ側に削除機能がないため、削除は一律禁止する
+      allow delete: if false;
+    }
+
+    // events 以外のパスへのアクセスは一切許可しない
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

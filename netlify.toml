@@ -1,0 +1,6 @@
+# Netlifyのデプロイ設定。
+# publish: 公開する静的ファイル一式が置かれているディレクトリ（リポジトリ直下）
+# functions: サーバーレス関数（レシート読み取り機能で使用）が置かれているディレクトリ
+[build]
+  publish = "."
+  functions = "netlify/functions"
