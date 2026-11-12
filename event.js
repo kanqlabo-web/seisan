@@ -271,7 +271,7 @@ function computeGroupPaymentShares(p, groups, unit) {
   return { targets, shareItems, rounded, amount };
 }
 
-// 手動調整（スロット）で決めた1人あたりの金額。グループのオブジェクト内に保存する
+// 手動調整（直接入力）で決めた1人あたりの金額。グループのオブジェクト内に保存する
 // （Firestoreルールがトップレベルの項目名を固定しているため、新しい項目はグループの中に持たせる）
 const getPerPersonOverride = g => {
   const v = g.perPersonOverride;
@@ -330,7 +330,7 @@ function computeGroupTotals(groups, groupPayments, unit) {
 const diffText = diff => diff > 0 ? `${formatYen(diff)} 多く集まります`
   : diff < 0 ? `${formatYen(-diff)} 足りません` : "ぴったりです";
 
-let latestGroupData = null; // スロットで調整中にプレビューを出すため、最新のグループ・支払いを覚えておく
+let latestGroupData = null; // 金額を調整中にプレビューを出すため、最新のグループ・支払いを覚えておく
 
 function renderGroupResult(groups, groupPayments, roundingUnit) {
   if (!groups.length) { resultArea.innerHTML = `<p class="empty">グループがまだありません</p>`; return; }
@@ -348,7 +348,7 @@ function renderGroupResult(groups, groupPayments, roundingUnit) {
   let html = `
     <div class="group-summary"><span>支払い合計</span><strong>${formatYen(paidTotal)}</strong></div>
     <div class="group-summary-sub"><span>集金合計${diffLabel}</span><strong>${formatYen(collectedTotal)}</strong></div>
-    <p class="slot-hint">金額をタップすると、スロットのように回して1人あたりの金額を調整できます</p>`;
+    <p class="slot-hint">金額をタップすると、1人あたりの金額を直接入力して調整できます</p>`;
 
   resultList.forEach(r => {
     html += `
@@ -391,9 +391,8 @@ async function saveGroupOverrides(updatedGroups) {
   } catch (err) { console.error(err); alert("金額の保存に失敗しました"); }
 }
 
-// ----- スロット（ドラム）式の金額調整 -----
-// 各桁を縦にスワイプして回す。0〜9を何周分か並べ、止まったら真ん中の周へこっそり戻すことで、どこまでも回せるようにする。
-const SLOT_ITEM_HEIGHT = 48, SLOT_LOOPS = 7;
+// ----- 1人あたりの金額を直接入力して調整 -----
+// 金額をタップすると下からシートが出て、数字キーボードでそのまま打ち込める。
 let slotState = null;
 
 function buildSlotSheet() {
@@ -404,26 +403,27 @@ function buildSlotSheet() {
   sheet.className = "slot-sheet-backdrop";
   sheet.hidden = true;
   sheet.innerHTML = `
-    <div class="slot-sheet" role="dialog" aria-modal="true" aria-labelledby="slotTitle">
+    <form class="slot-sheet" role="dialog" aria-modal="true" aria-labelledby="slotTitle">
       <div class="slot-sheet-handle"></div>
       <h3 id="slotTitle" class="slot-title"></h3>
       <p class="slot-sub" id="slotSub"></p>
-      <div class="slot-machine">
-        <span class="slot-yen">¥</span>
-        <div class="slot-reels" id="slotReels"></div>
-        <span class="slot-per">/人</span>
+      <div class="amount-direct">
+        <span class="amount-direct-yen">¥</span>
+        <input type="number" id="slotAmountInput" inputmode="numeric" pattern="[0-9]*" min="0" aria-label="1人あたりの金額">
+        <span class="amount-direct-per">/人</span>
       </div>
-      <div class="slot-steps" id="slotSteps"></div>
       <div class="slot-preview" id="slotPreview"></div>
       <div class="slot-actions">
         <button type="button" class="secondary-button" id="slotResetButton">自動に戻す</button>
-        <button type="button" class="primary-button" id="slotSaveButton">決定</button>
+        <button type="submit" class="primary-button" id="slotSaveButton">決定</button>
       </div>
-    </div>`;
+    </form>`;
   document.body.appendChild(sheet);
   sheet.addEventListener("click", e => { if (e.target === sheet) closeSlotSheet(); });
-  sheet.querySelector("#slotSaveButton").addEventListener("click", () => commitSlot(false));
+  // Enter（キーボードの「完了」）でも決定できるよう、formのsubmitで保存する
+  sheet.querySelector("form").addEventListener("submit", e => { e.preventDefault(); commitSlot(false); });
   sheet.querySelector("#slotResetButton").addEventListener("click", () => commitSlot(true));
+  sheet.querySelector("#slotAmountInput").addEventListener("input", updateSlotPreview);
   document.addEventListener("keydown", e => { if (e.key === "Escape" && !sheet.hidden) closeSlotSheet(); });
   return sheet;
 }
@@ -435,54 +435,20 @@ function openSlotSheet(groupId) {
   if (!group) return;
   const { resultList } = computeGroupTotals(groups, groupPayments, unit);
   const r = resultList.find(x => x.id === groupId);
-  const value = Math.max(0, Math.round(r.perPerson));
-  const digitCount = Math.min(7, Math.max(4, String(value).length + 1));
-  // 端数処理の単位より下の桁（100円単位なら下2桁）は0で固定し、回せないようにする
-  const lockedDigits = Math.min(digitCount - 1, Math.floor(Math.log10(unit) + 1e-9));
-  const step = 10 ** lockedDigits;
 
   const sheet = buildSlotSheet();
-  slotState = { groupId, digitCount, lockedDigits, step, autoPerPerson: Math.round(r.autoPerPerson), reels: [] };
+  slotState = { groupId, autoPerPerson: Math.round(r.autoPerPerson) };
   sheet.querySelector("#slotTitle").textContent = group.name;
   sheet.querySelector("#slotSub").textContent = `${r.people}人・自動計算だと ${formatYen(r.autoPerPerson)}/人`;
   sheet.querySelector("#slotResetButton").disabled = !r.isManual;
-
-  const reelsEl = sheet.querySelector("#slotReels");
-  reelsEl.innerHTML = "";
-  const digits = String(value).padStart(digitCount, "0").slice(-digitCount).split("").map(Number);
-  digits.forEach((d, i) => {
-    const place = digitCount - 1 - i; // 0が一の位
-    if (i > 0 && place % 3 === 2) {
-      const comma = document.createElement("span");
-      comma.className = "slot-comma"; comma.textContent = ",";
-      reelsEl.appendChild(comma);
-    }
-    const locked = place < lockedDigits;
-    const reel = document.createElement("div");
-    reel.className = `slot-reel${locked ? " is-locked" : ""}`;
-    reel.setAttribute("aria-label", `${["一", "十", "百", "千", "万", "十万", "百万"][place]}の位`);
-    const list = [];
-    for (let loop = 0; loop < SLOT_LOOPS; loop++) for (let n = 0; n < 10; n++) list.push(`<div class="slot-digit">${n}</div>`);
-    reel.innerHTML = `<div class="slot-pad"></div>${list.join("")}<div class="slot-pad"></div>`;
-    reelsEl.appendChild(reel);
-    const state = { el: reel, place, locked, digit: d };
-    slotState.reels.push(state);
-    if (!locked) attachReel(state);
-  });
-
-  sheet.querySelector("#slotSteps").innerHTML = [-10, -1, 1, 10].map(k =>
-    `<button type="button" class="slot-step" data-k="${k}">${k > 0 ? "+" : "−"}${formatYen(Math.abs(k) * step).replace("¥", "")}</button>`).join("");
-  sheet.querySelectorAll(".slot-step").forEach(btn => btn.addEventListener("click", () => {
-    setSlotValue(Math.max(0, getSlotValue() + Number(btn.dataset.k) * step), true);
-  }));
+  const input = sheet.querySelector("#slotAmountInput");
+  input.value = Math.max(0, Math.round(r.perPerson));
 
   sheet.hidden = false;
   document.body.classList.add("sheet-open");
-  // 表示されてから位置を合わせる（非表示のままだとスクロール位置を設定できないため）
-  requestAnimationFrame(() => {
-    slotState.reels.forEach(rs => scrollReelTo(rs, rs.digit, false));
-    updateSlotPreview();
-  });
+  updateSlotPreview();
+  input.focus();
+  input.select();
 }
 
 function closeSlotSheet() {
@@ -492,67 +458,9 @@ function closeSlotSheet() {
   slotState = null;
 }
 
-function scrollReelTo(rs, digit, smooth) {
-  const middleLoop = Math.floor(SLOT_LOOPS / 2);
-  rs.el.scrollTo({ top: (middleLoop * 10 + digit) * SLOT_ITEM_HEIGHT, behavior: smooth ? "smooth" : "auto" });
-  rs.digit = digit;
-  highlightReel(rs);
-}
-
-function highlightReel(rs) {
-  const index = Math.round(rs.el.scrollTop / SLOT_ITEM_HEIGHT);
-  rs.el.querySelectorAll(".slot-digit").forEach((el, i) => el.classList.toggle("is-current", i === index));
-}
-
-function attachReel(rs) {
-  let settleTimer = null;
-  rs.el.addEventListener("scroll", () => {
-    const index = Math.round(rs.el.scrollTop / SLOT_ITEM_HEIGHT);
-    const digit = ((index % 10) + 10) % 10;
-    if (digit !== rs.digit) {
-      rs.digit = digit;
-      if (navigator.vibrate) { try { navigator.vibrate(4); } catch (_) { /* 非対応端末は無視 */ } }
-      updateSlotPreview();
-    }
-    highlightReel(rs);
-    clearTimeout(settleTimer);
-    // 回し終わったら、同じ数字のまま真ん中の周へ戻しておく（端まで行って止まらないように）
-    settleTimer = setTimeout(() => {
-      const middleLoop = Math.floor(SLOT_LOOPS / 2);
-      const target = (middleLoop * 10 + rs.digit) * SLOT_ITEM_HEIGHT;
-      if (Math.abs(rs.el.scrollTop - target) > SLOT_ITEM_HEIGHT * 5) rs.el.scrollTo({ top: target, behavior: "auto" });
-    }, 180);
-  }, { passive: true });
-  // PCでもマウスホイールで1目盛りずつ回せるようにする
-  rs.el.addEventListener("wheel", e => {
-    e.preventDefault();
-    const dir = Math.sign(e.deltaY);
-    if (!dir) return;
-    rs.el.scrollBy({ top: dir * SLOT_ITEM_HEIGHT, behavior: "smooth" });
-  }, { passive: false });
-  // 数字をタップしたら、その数字に合わせる
-  rs.el.addEventListener("click", e => {
-    const digitEl = e.target.closest(".slot-digit");
-    if (!digitEl) return;
-    const top = digitEl.offsetTop - rs.el.querySelector(".slot-pad").offsetHeight;
-    rs.el.scrollTo({ top, behavior: "smooth" });
-  });
-}
-
 function getSlotValue() {
-  if (!slotState) return 0;
-  return slotState.reels.reduce((sum, rs) => sum + (rs.locked ? 0 : rs.digit) * 10 ** rs.place, 0);
-}
-
-function setSlotValue(value, smooth) {
-  if (!slotState) return;
-  const max = 10 ** slotState.digitCount - slotState.step;
-  value = Math.min(max, Math.max(0, Math.round(value / slotState.step) * slotState.step));
-  slotState.reels.forEach(rs => {
-    if (rs.locked) return;
-    scrollReelTo(rs, Math.floor(value / 10 ** rs.place) % 10, smooth);
-  });
-  updateSlotPreview();
+  const v = Number(document.getElementById("slotAmountInput")?.value);
+  return Number.isFinite(v) && v > 0 ? Math.round(v) : 0;
 }
 
 function groupsWithOverride(groupId, perPerson) {
@@ -581,6 +489,7 @@ function updateSlotPreview() {
 
 async function commitSlot(reset) {
   if (!slotState) return;
+  if (!reset && document.getElementById("slotAmountInput").value === "") return alert("金額を入れてください");
   const value = reset ? null : getSlotValue();
   const groupId = slotState.groupId;
   // 自動計算と同じ金額に合わせた場合は、手動扱いにしない
