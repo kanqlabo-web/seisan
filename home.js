@@ -17,7 +17,7 @@ const params = new URLSearchParams(window.location.search);
 const eventId = params.get("id");
 
 let currentMode = "individual", statuses = [], members = [], groups = [], payments = [], groupPayments = [];
-let editingStatusId = null, editingMemberId = null, editingGroupId = null;
+let editingStatusId = null, editingMemberId = null, loadedGroups = [];
 
 const eventName = document.getElementById("eventName");
 const individualModeButton = document.getElementById("individualModeButton");
@@ -35,11 +35,10 @@ const memberStatusOptions = document.getElementById("memberStatusOptions");
 const addMemberButton = document.getElementById("addMemberButton");
 const memberList = document.getElementById("memberList");
 
-const groupName = document.getElementById("groupName");
-const groupPeople = document.getElementById("groupPeople");
-const groupBurdenRate = document.getElementById("groupBurdenRate");
-const addGroupButton = document.getElementById("addGroupButton");
-const groupList = document.getElementById("groupList");
+const groupRows = document.getElementById("groupRows");
+const addGroupRowButton = document.getElementById("addGroupRowButton");
+const useBurdenRate = document.getElementById("useBurdenRate");
+const burdenRateHint = document.getElementById("burdenRateHint");
 
 const groupFirstPaymentSection = document.getElementById("groupFirstPaymentSection");
 const groupFirstPaymentEventNamePreview = document.getElementById("groupFirstPaymentEventNamePreview");
@@ -297,93 +296,88 @@ addMemberButton.addEventListener("click", () => {
   renderMemberList();
 });
 
-function renderGroupList() {
-  groupList.innerHTML = "";
-  if (!groups.length) { groupList.innerHTML = `<p class="empty">グループはまだありません</p>`; return; }
+// ----- 団体モードの入力（スマホで最小限の操作で済むよう、行をその場で直接編集する） -----
+// グループ名は空欄でもOK（保存時に「グループA」「グループB」…を自動で付ける）。
+// 負担割合はふだんは隠しておき、必要な人だけ「グループごとに負担を変える」をオンにして使う。
+const GROUP_AUTO_NAMES = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const autoGroupName = i => `グループ${GROUP_AUTO_NAMES[i] || i + 1}`;
+const escapeAttr = v => String(v ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 
-  groups.forEach(g => {
+function newGroupRow() { return { id: createId(), name: "", people: 1, burdenRate: 100 }; }
+
+function renderGroupRows() {
+  const showRate = useBurdenRate.checked;
+  burdenRateHint.hidden = !showRate;
+  groupRows.innerHTML = "";
+
+  groups.forEach((g, i) => {
     const row = document.createElement("div");
+    row.className = `group-row${showRate ? " with-rate" : ""}`;
+    row.innerHTML = `
+      <input type="text" class="group-row-name" value="${escapeAttr(g.name)}" placeholder="${autoGroupName(i)}" aria-label="グループ名">
+      <div class="stepper" aria-label="人数">
+        <button type="button" class="stepper-btn" data-step="-1" aria-label="1人減らす">−</button>
+        <input type="number" class="group-row-people" inputmode="numeric" pattern="[0-9]*" min="1" value="${escapeAttr(g.people)}" aria-label="人数">
+        <span class="stepper-unit">人</span>
+        <button type="button" class="stepper-btn" data-step="1" aria-label="1人増やす">＋</button>
+      </div>
+      ${showRate ? `
+      <div class="group-row-rate">
+        <input type="number" class="group-row-burden" inputmode="numeric" pattern="[0-9]*" min="0" max="1000" value="${escapeAttr(getGroupBurdenRate(g))}" aria-label="負担割合">
+        <span>%</span>
+      </div>` : ""}
+      <button type="button" class="group-row-delete" aria-label="このグループを消す" ${groups.length <= 1 ? "disabled" : ""}>×</button>`;
+    groupRows.appendChild(row);
 
-    if (editingGroupId === g.id) {
-      row.className = "list-item is-editing";
-      row.innerHTML = `
-        <div class="edit-inputs edit-fields-row">
-          <input type="text" class="edit-group-name" value="${g.name}" placeholder="グループ名">
-          <input type="number" class="edit-group-people" value="${g.people}" placeholder="人数" min="1">
-          <div class="discount-input-wrapper">
-            <input type="number" class="edit-group-burden" value="${getGroupBurdenRate(g)}" min="0" max="1000">
-            <span>%</span>
-          </div>
-        </div>
-        <div class="edit-actions">
-          <button type="button" class="secondary-button group-cancel-btn">キャンセル</button>
-          <button type="button" class="group-save-btn">保存</button>
-        </div>`;
-      groupList.appendChild(row);
-
-      row.querySelector(".group-cancel-btn").addEventListener("click", () => {
-        editingGroupId = null;
-        renderGroupList();
+    row.querySelector(".group-row-name").addEventListener("input", e => { g.name = e.target.value; });
+    const peopleInput = row.querySelector(".group-row-people");
+    peopleInput.addEventListener("input", () => { g.people = Number(peopleInput.value) || ""; });
+    row.querySelectorAll(".stepper-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const next = Math.max(1, (Number(g.people) || 0) + Number(btn.dataset.step));
+        g.people = next; peopleInput.value = next;
       });
-      row.querySelector(".group-save-btn").addEventListener("click", () => {
-        const name = row.querySelector(".edit-group-name").value.trim();
-        const people = Number(row.querySelector(".edit-group-people").value);
-        const burdenRateInput = row.querySelector(".edit-group-burden").value;
-        const burdenRate = Number(burdenRateInput === "" ? 100 : burdenRateInput);
-        if (!name) return alert("グループ名を入力してください");
-        if (!people || people <= 0) return alert("正しい人数を入力してください");
-        if (isNaN(burdenRate) || burdenRate < 0 || burdenRate > 1000) return alert("負担割合は0〜1000で入力してください（100%が基準です）");
-
-        const target = groups.find(grp => grp.id === g.id);
-        target.name = name; target.people = people; target.burdenRate = burdenRate;
-        delete target.discount;
-        editingGroupId = null;
-        renderGroupList();
-      });
-    } else {
-      row.className = "list-item";
-      row.innerHTML = `
-        <div>
-          <strong>${g.name}</strong>
-          <span>${g.people}人・${formatBurdenRate(getGroupBurdenRate(g))}</span>
-        </div>
-        <div class="item-actions">
-          <button type="button" class="edit-button group-edit-btn" data-id="${g.id}">編集</button>
-          <button type="button" class="secondary-button group-delete-btn" data-id="${g.id}">削除</button>
-        </div>`;
-      groupList.appendChild(row);
-    }
-  });
-
-  groupList.querySelectorAll(".group-edit-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      editingGroupId = btn.dataset.id;
-      renderGroupList();
     });
-  });
-  groupList.querySelectorAll(".group-delete-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const id = btn.dataset.id;
-      if (!confirm("このグループを削除してもよろしいですか？")) return;
-      groups = groups.filter(g => g.id !== id);
-      if (editingGroupId === id) editingGroupId = null;
-      renderGroupList();
+    const rateInput = row.querySelector(".group-row-burden");
+    if (rateInput) rateInput.addEventListener("input", () => {
+      g.burdenRate = rateInput.value === "" ? 100 : Number(rateInput.value);
+      delete g.discount;
+    });
+    row.querySelector(".group-row-delete").addEventListener("click", () => {
+      if (groups.length <= 1) return;
+      groups = groups.filter(x => x.id !== g.id);
+      renderGroupRows();
     });
   });
 }
 
-addGroupButton.addEventListener("click", () => {
-  const name = groupName.value.trim();
-  const people = Number(groupPeople.value);
-  const burdenRate = Number(groupBurdenRate.value === "" ? 100 : groupBurdenRate.value);
-  if (!name) return alert("グループ名を入力してください");
-  if (!people || people <= 0) return alert("正しい人数を入力してください");
-  if (isNaN(burdenRate) || burdenRate < 0 || burdenRate > 1000) return alert("負担割合は0〜1000で入力してください（100%が基準です）");
-
-  groups.push({ id: createId(), name, people, burdenRate });
-  groupName.value = ""; groupPeople.value = ""; groupBurdenRate.value = "100";
-  renderGroupList();
+addGroupRowButton.addEventListener("click", () => {
+  groups.push(newGroupRow());
+  renderGroupRows();
+  groupRows.querySelector(".group-row:last-child .group-row-name")?.focus();
 });
+useBurdenRate.addEventListener("change", () => {
+  // オフにしたときは全グループを基準（100%）に戻す（見えない設定が残って計算がずれないようにする）
+  if (!useBurdenRate.checked) groups.forEach(g => { g.burdenRate = 100; delete g.discount; });
+  renderGroupRows();
+});
+
+// 保存前に入力内容をチェックし、空欄の名前を自動の名前で埋める。問題があればエラーメッセージを返す
+function finalizeGroups() {
+  for (const [i, g] of groups.entries()) {
+    const people = Number(g.people);
+    if (!people || people <= 0 || !Number.isInteger(people)) return `${g.name || autoGroupName(i)}の人数を入れてください`;
+    const rate = getGroupBurdenRate(g);
+    if (isNaN(rate) || rate < 0 || rate > 1000) return "負担割合は0〜1000%で入れてください（100%がふつう）";
+  }
+  groups.forEach((g, i) => {
+    g.name = String(g.name || "").trim() || autoGroupName(i);
+    g.people = Number(g.people);
+    g.burdenRate = getGroupBurdenRate(g);
+    delete g.discount;
+  });
+  return null;
+}
 
 backToEventButton.addEventListener("click", () => { location.href = `event.html?id=${eventId}`; });
 
@@ -391,9 +385,14 @@ createEventButton.addEventListener("click", async () => {
   const name = eventName.value.trim();
   if (!name) return alert("イベント名を入力してください");
   if (currentMode === "individual" && !members.length) return alert("参加者を1人以上追加してください");
-  if (currentMode === "group" && !groups.length) return alert("グループを1つ以上追加してください");
+  if (currentMode === "group") {
+    if (!groups.length) return alert("グループを1つ以上追加してください");
+    const error = finalizeGroups();
+    if (error) return alert(error);
+  }
 
-  const eventData = { name, mode: currentMode, statuses, members, groups };
+  // 個人モードで保存するときは、団体モード用の空の入力行を保存しない（読み込んだ元のグループはそのまま残す）
+  const eventData = { name, mode: currentMode, statuses, members, groups: currentMode === "group" ? groups : loadedGroups };
 
   try {
     if (eventId) {
@@ -441,6 +440,7 @@ async function loadExistingEvent() {
     statuses = data.statuses || [];
     members = data.members || [];
     groups = data.groups || [];
+    loadedGroups = groups.map(g => ({ ...g }));
     payments = data.payments || [];
     groupPayments = data.groupPayments || [];
 
@@ -448,8 +448,10 @@ async function loadExistingEvent() {
     if (currentMode === "group") groupModeButton.click();
     else individualModeButton.click();
 
+    if (!groups.length) groups = [newGroupRow()];
+    useBurdenRate.checked = groups.some(g => getGroupBurdenRate(g) !== 100);
     renderIndividual();
-    renderGroupList();
+    renderGroupRows();
 
     if (groupFirstPaymentSection) groupFirstPaymentSection.style.display = "none";
     createEventButton.textContent = "変更を保存";
@@ -463,6 +465,7 @@ async function loadExistingEvent() {
 if (eventId) {
   loadExistingEvent();
 } else {
+  groups = [newGroupRow(), newGroupRow()];
   renderIndividual();
-  renderGroupList();
+  renderGroupRows();
 }
